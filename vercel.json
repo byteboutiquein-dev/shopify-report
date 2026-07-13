@@ -1,0 +1,28 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/orders",
+      "schedule": "30 3 * * *"
+    },
+    {
+      "path": "/api/cron/courier-status",
+      "schedule": "30 3 * * *"
+    },
+    {
+      "path": "/api/cron/orders",
+      "schedule": "30 8 * * *"
+    },
+    {
+      "path": "/api/cron/courier-status",
+      "schedule": "30 8 * * *"
+    },
+    {
+      "path": "/api/cron/orders",
+      "schedule": "30 13 * * *"
+    },
+    {
+      "path": "/api/cron/courier-status",
+      "schedule": "30 13 * * *"
+    }
+  ]
+}
