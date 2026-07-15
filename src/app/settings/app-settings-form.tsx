@@ -19,6 +19,7 @@ export function AppSettingsForm({ initialSettings }: AppSettingsFormProps) {
   const [deliveryDelayDays, setDeliveryDelayDays] = useState(String(initialSettings.deliveryDelayDays));
   const [isSaving, setIsSaving] = useState(false);
   const [notice, setNotice] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const [shopifyOrderRefreshDays, setShopifyOrderRefreshDays] = useState(String(initialSettings.shopifyOrderRefreshDays));
   const [shopifyTrackingRefreshLimit, setShopifyTrackingRefreshLimit] = useState(
     String(initialSettings.shopifyTrackingRefreshLimit)
   );
@@ -32,6 +33,7 @@ export function AppSettingsForm({ initialSettings }: AppSettingsFormProps) {
       const response = await fetch("/api/settings", {
         body: JSON.stringify({
           deliveryDelayDays: Number(deliveryDelayDays),
+          shopifyOrderRefreshDays: Number(shopifyOrderRefreshDays),
           shopifyTrackingRefreshLimit: Number(shopifyTrackingRefreshLimit)
         }),
         headers: {
@@ -46,6 +48,7 @@ export function AppSettingsForm({ initialSettings }: AppSettingsFormProps) {
       }
 
       setDeliveryDelayDays(String(data.settings.deliveryDelayDays));
+      setShopifyOrderRefreshDays(String(data.settings.shopifyOrderRefreshDays));
       setShopifyTrackingRefreshLimit(String(data.settings.shopifyTrackingRefreshLimit));
       setNotice({ message: "Settings saved. New sync/delay actions will use these values.", type: "success" });
     } catch (error) {
@@ -66,6 +69,17 @@ export function AppSettingsForm({ initialSettings }: AppSettingsFormProps) {
       </div>
       <div className="panel-body">
         <form className="form-grid sync-form-grid" onSubmit={handleSubmit}>
+          <label className="field">
+            <span>Shopify order refresh days</span>
+            <input
+              max={120}
+              min={1}
+              type="number"
+              value={shopifyOrderRefreshDays}
+              onChange={(event) => setShopifyOrderRefreshDays(event.target.value)}
+            />
+            <small>Order sync will revisit orders created in the last N days to catch late fulfillment/tracking.</small>
+          </label>
           <label className="field">
             <span>Shopify tracking refresh orders</span>
             <input

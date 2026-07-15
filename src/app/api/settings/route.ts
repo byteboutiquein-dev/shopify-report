@@ -5,6 +5,7 @@ import { saveAppSettings } from "@/lib/app-settings";
 
 const settingsRequestSchema = z.object({
   deliveryDelayDays: z.coerce.number().int().min(1).max(30),
+  shopifyOrderRefreshDays: z.coerce.number().int().min(1).max(120),
   shopifyTrackingRefreshLimit: z.coerce.number().int().min(1).max(5000)
 });
 

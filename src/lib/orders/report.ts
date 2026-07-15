@@ -64,6 +64,23 @@ export type ReportRow = {
   courierComments: string;
 };
 
+export type ReportSortKey =
+  | "date-desc"
+  | "date-asc"
+  | "order-desc"
+  | "order-asc"
+  | "name-asc"
+  | "courier-asc"
+  | "delivery-asc";
+
+export type OrdersReportPageInput = {
+  page?: number;
+  pageSize?: number;
+  startDate?: string;
+  endDate?: string;
+  sortKey?: ReportSortKey;
+};
+
 function firstJoin<T>(value: T | T[] | null | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
@@ -158,19 +175,45 @@ async function getLatestComments(orderIds: string[], commentType: "Review" | "Co
   return commentsByOrder;
 }
 
-export async function getOrdersReportRows() {
+export async function getOrdersReportRows(input: OrdersReportPageInput = {}) {
   try {
     const supabase = createServerSupabaseClient();
-    const ordersResponse = await supabase
+    const page = Math.max(1, input.page ?? 1);
+    const pageSize = Math.min(Math.max(1, input.pageSize ?? 100), 250);
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
+    const sortKey = input.sortKey ?? "date-desc";
+
+    let query = supabase
       .from("orders")
-      .select(reportSelect)
-      .order("order_date", { ascending: false })
-      .limit(100)
-      .returns<OrderQueryRow[]>();
+      .select(reportSelect, { count: "exact" });
+
+    if (input.startDate) {
+      query = query.gte("order_date", input.startDate);
+    }
+
+    if (input.endDate) {
+      query = query.lte("order_date", input.endDate);
+    }
+
+    if (sortKey === "date-asc") {
+      query = query.order("order_date", { ascending: true }).order("order_name", { ascending: true });
+    } else if (sortKey === "order-asc") {
+      query = query.order("order_name", { ascending: true });
+    } else if (sortKey === "order-desc") {
+      query = query.order("order_name", { ascending: false });
+    } else if (sortKey === "name-asc") {
+      query = query.order("customer_name", { ascending: true, nullsFirst: false }).order("order_date", { ascending: false });
+    } else {
+      query = query.order("order_date", { ascending: false }).order("order_name", { ascending: false });
+    }
+
+    const ordersResponse = await query.range(from, to).returns<OrderQueryRow[]>();
 
     if (ordersResponse.error) {
       return {
         rows: [],
+        totalRows: 0,
         error: ordersResponse.error.message
       };
     }
@@ -184,11 +227,13 @@ export async function getOrdersReportRows() {
 
     return {
       rows: mapReportRows(orders, reviewCommentsByOrder, courierCommentsByOrder),
+      totalRows: ordersResponse.count ?? orders.length,
       error: null
     };
   } catch (error) {
     return {
       rows: [],
+      totalRows: 0,
       error: error instanceof Error ? error.message : "Could not load order report."
     };
   }

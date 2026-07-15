@@ -6,12 +6,22 @@ import { RefreshCcw } from "lucide-react";
 import type { SyncBaseline } from "@/lib/sync/shopify-orders";
 
 type SyncResponse = {
-  baseline: SyncBaseline | null;
+  courierSync: {
+    checked: number;
+    failed: number;
+    skipped: number;
+    updated: number;
+  } | null;
+  courierSyncError: string | null;
   status: "Success" | "Partial" | "Failed";
-  ordersChecked: number;
-  ordersInserted: number;
-  ordersUpdated: number;
   message: string;
+  orderSync: {
+    baseline: SyncBaseline | null;
+    ordersChecked: number;
+    ordersInserted: number;
+    ordersUpdated: number;
+    status: "Success" | "Partial" | "Failed";
+  };
 };
 
 type SyncControlsProps = {
@@ -54,11 +64,16 @@ export function SyncControls({ baseline }: SyncControlsProps) {
     } catch (error) {
       setResult({
         status: "Failed",
-        baseline,
-        ordersChecked: 0,
-        ordersInserted: 0,
-        ordersUpdated: 0,
-        message: error instanceof Error ? error.message : "Sync request failed."
+        courierSync: null,
+        courierSyncError: error instanceof Error ? error.message : "Sync request failed.",
+        message: error instanceof Error ? error.message : "Sync request failed.",
+        orderSync: {
+          status: "Failed",
+          baseline,
+          ordersChecked: 0,
+          ordersInserted: 0,
+          ordersUpdated: 0
+        }
       });
     } finally {
       setIsSyncing(false);
@@ -68,7 +83,7 @@ export function SyncControls({ baseline }: SyncControlsProps) {
   return (
     <section className="panel">
       <div className="panel-header">
-        <h2>Shopify order sync</h2>
+        <h2>Order + courier sync</h2>
         <span className="badge ready">Manual</span>
       </div>
       <div className="panel-body">
@@ -103,21 +118,34 @@ export function SyncControls({ baseline }: SyncControlsProps) {
                 Use Last Synced
               </button>
             ) : null}
-            <button className="button" disabled={isSyncing} type="submit">
+            <button aria-busy={isSyncing} className="button" disabled={isSyncing} type="submit">
               <RefreshCcw aria-hidden="true" size={18} />
-              {isSyncing ? "Syncing" : "Sync Shopify Orders"}
+              {isSyncing ? "Syncing" : "Sync Orders + Courier"}
             </button>
           </div>
         </form>
 
+        {isSyncing ? (
+          <div className="running-state">
+            <RefreshCcw aria-hidden="true" className="spin" size={18} />
+            <div>
+              <strong>Full sync is running</strong>
+              <p>Fetching Shopify orders first, then checking courier tracking one by one.</p>
+            </div>
+          </div>
+        ) : null}
+
         {result ? (
-          <div className={result.status === "Success" ? "notice success" : "notice error"}>
+          <div className={result.status === "Success" ? "notice success" : result.status === "Partial" ? "notice warning" : "notice error"}>
             <strong>{result.status}</strong>
             <p>{result.message}</p>
             <div className="result-grid">
-              <span>Checked: {result.ordersChecked}</span>
-              <span>Inserted: {result.ordersInserted}</span>
-              <span>Updated: {result.ordersUpdated}</span>
+              <span>Shopify checked: {result.orderSync.ordersChecked}</span>
+              <span>Shopify inserted: {result.orderSync.ordersInserted}</span>
+              <span>Shopify updated: {result.orderSync.ordersUpdated}</span>
+              <span>Courier checked: {result.courierSync?.checked ?? 0}</span>
+              <span>Courier updated: {result.courierSync?.updated ?? 0}</span>
+              <span>Courier failed: {result.courierSync?.failed ?? (result.courierSyncError ? 1 : 0)}</span>
             </div>
           </div>
         ) : null}

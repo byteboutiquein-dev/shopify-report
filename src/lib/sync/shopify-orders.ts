@@ -87,6 +87,12 @@ function toOrderDate(value: string) {
   return new Date(value).toISOString().slice(0, 10);
 }
 
+function dateDaysAgo(days: number) {
+  const date = new Date();
+  date.setUTCDate(date.getUTCDate() - Math.max(0, days - 1));
+  return date.toISOString().slice(0, 10);
+}
+
 function mapShopifyOrder(shopId: string, order: ShopifyOrderNode, includeCustomers: boolean) {
   const orderPayload: Record<string, string | number | null> = {
     shop_id: shopId,
@@ -427,7 +433,8 @@ export async function syncShopifyOrders(input: SyncInput): Promise<SyncResult> {
 
     if (shopifyOrders.length === 0) {
       const trackingRefreshOrders = await fetchShopifyOrders({
-        limit: appSettings.shopifyTrackingRefreshLimit
+        limit: appSettings.shopifyTrackingRefreshLimit,
+        startDate: dateDaysAgo(appSettings.shopifyOrderRefreshDays)
       });
       const trackingRowsUpdated = await refreshTrackingFromShopifyOrders(shop.id, trackingRefreshOrders);
       const result = {
@@ -443,8 +450,8 @@ export async function syncShopifyOrders(input: SyncInput): Promise<SyncResult> {
       return {
         ...result,
         message: baseline
-          ? `No new Shopify orders found after ${baseline.orderName}. Refreshed tracking for ${trackingRowsUpdated} orders.`
-          : `No Shopify orders were found for initial sync. Refreshed tracking for ${trackingRowsUpdated} orders.`
+          ? `No new Shopify orders found after ${baseline.orderName}. Refreshed tracking for ${trackingRowsUpdated} orders from the last ${appSettings.shopifyOrderRefreshDays} days.`
+          : `No Shopify orders were found for initial sync. Refreshed tracking for ${trackingRowsUpdated} orders from the last ${appSettings.shopifyOrderRefreshDays} days.`
       };
     }
 
@@ -504,7 +511,8 @@ export async function syncShopifyOrders(input: SyncInput): Promise<SyncResult> {
     }
 
     const trackingRefreshOrders = await fetchShopifyOrders({
-      limit: appSettings.shopifyTrackingRefreshLimit
+      limit: appSettings.shopifyTrackingRefreshLimit,
+      startDate: dateDaysAgo(appSettings.shopifyOrderRefreshDays)
     });
     const trackingRowsUpdated = await refreshTrackingFromShopifyOrders(
       shop.id,
@@ -524,8 +532,8 @@ export async function syncShopifyOrders(input: SyncInput): Promise<SyncResult> {
     return {
       ...result,
       message: baseline
-        ? `Synced ${shopifyOrders.length} Shopify orders after ${baseline.orderName}. Refreshed tracking for ${trackingRowsUpdated} orders.`
-        : `Synced ${shopifyOrders.length} Shopify orders. Refreshed tracking for ${trackingRowsUpdated} orders.`
+        ? `Synced ${shopifyOrders.length} Shopify orders after ${baseline.orderName}. Refreshed tracking for ${trackingRowsUpdated} orders from the last ${appSettings.shopifyOrderRefreshDays} days.`
+        : `Synced ${shopifyOrders.length} Shopify orders. Refreshed tracking for ${trackingRowsUpdated} orders from the last ${appSettings.shopifyOrderRefreshDays} days.`
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown sync failure.";

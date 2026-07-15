@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Download, Filter, Info, RefreshCw, Search, X } from "lucide-react";
 
 import type { ReportRow } from "@/lib/orders/report";
@@ -12,6 +12,7 @@ type OrdersReportProps = {
   currentDate: string;
   deliveryDelayDays: number;
   initialRows: ReportRow[];
+  initialTotalRows: number;
 };
 
 type SortKey =
@@ -74,6 +75,13 @@ type TrackingStatusCheckResponse = {
   rows?: ReportRow[];
   skipped?: number;
   updated?: number;
+};
+
+type ReportPageResponse = {
+  ok: boolean;
+  message?: string;
+  rows?: ReportRow[];
+  totalRows?: number;
 };
 
 const sortOptions: Array<{ value: SortKey; label: string }> = [
@@ -323,18 +331,74 @@ function sortRows(rows: ReportRow[], sortKey: SortKey, currentDate: string, deli
   });
 }
 
-export function OrdersReport({ currentDate, deliveryDelayDays, initialRows }: OrdersReportProps) {
+export function OrdersReport({ currentDate, deliveryDelayDays, initialRows, initialTotalRows }: OrdersReportProps) {
   const [rows, setRows] = useState(initialRows);
+  const [totalRows, setTotalRows] = useState(initialTotalRows);
   const [filters, setFilters] = useState<Filters>(emptyFilters);
   const [sortKey, setSortKey] = useState<SortKey>("date-desc");
   const [pageSize, setPageSize] = useState<(typeof pageSizeOptions)[number]>(100);
   const [page, setPage] = useState(1);
+  const [loadingPage, setLoadingPage] = useState(false);
   const [inlineDrafts, setInlineDrafts] = useState<Record<string, InlineMessageDraft>>({});
   const [savingRowIds, setSavingRowIds] = useState<Set<string>>(() => new Set());
   const [checkingStatuses, setCheckingStatuses] = useState(false);
   const [checkingRowIds, setCheckingRowIds] = useState<Set<string>>(() => new Set());
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ type: "success" | "warning" | "error"; message: string } | null>(null);
+  const didLoadInitialPage = useRef(false);
+  useEffect(() => {
+    if (!didLoadInitialPage.current) {
+      didLoadInitialPage.current = true;
+      return;
+    }
+
+    const controller = new AbortController();
+    const params = new URLSearchParams({
+      page: String(page),
+      pageSize: String(pageSize),
+      sortKey
+    });
+
+    if (filters.startDate) params.set("startDate", filters.startDate);
+    if (filters.endDate) params.set("endDate", filters.endDate);
+
+    async function loadPage() {
+      setLoadingPage(true);
+
+      try {
+        const response = await fetch(`/api/orders/report?${params.toString()}`, {
+          cache: "no-store",
+          signal: controller.signal
+        });
+        const data = (await response.json()) as ReportPageResponse;
+
+        if (!response.ok || !data.ok || !data.rows) {
+          throw new Error(data.message ?? "Could not load this page.");
+        }
+
+        setRows(data.rows);
+        setTotalRows(data.totalRows ?? data.rows.length);
+        setSelectedOrderId((current) => (current && data.rows?.some((row) => row.id === current) ? current : null));
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
+
+        setNotice({
+          type: "error",
+          message: error instanceof Error ? error.message : "Could not load this page."
+        });
+      } finally {
+        if (!controller.signal.aborted) {
+          setLoadingPage(false);
+        }
+      }
+    }
+
+    void loadPage();
+
+    return () => controller.abort();
+  }, [filters.endDate, filters.startDate, page, pageSize, sortKey]);
   const duplicateTrackingIds = useMemo(() => {
     const counts = new Map<string, string[]>();
 
@@ -451,12 +515,9 @@ export function OrdersReport({ currentDate, deliveryDelayDays, initialRows }: Or
     [currentDate, deliveryDelayDays, filteredRows, sortKey]
   );
   const statusCheckRows = useMemo(() => rows.filter((row) => row.trackingId.trim() && row.deliveryStatus !== "Delivered"), [rows]);
-  const totalPages = Math.max(1, Math.ceil(sortedRows.length / pageSize));
+  const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
   const safePage = Math.min(page, totalPages);
-  const pageRows = useMemo(() => {
-    const start = (safePage - 1) * pageSize;
-    return sortedRows.slice(start, start + pageSize);
-  }, [pageSize, safePage, sortedRows]);
+  const pageRows = sortedRows;
   const selectedRow = useMemo(
     () => (selectedOrderId ? rows.find((row) => row.id === selectedOrderId) ?? null : null),
     [rows, selectedOrderId]
@@ -800,7 +861,7 @@ export function OrdersReport({ currentDate, deliveryDelayDays, initialRows }: Or
             <input type="date" value={filters.endDate} onChange={(event) => updateFilter("endDate", event.target.value)} />
           </label>
           <div className="filter-console-count">
-            <strong>{dateFilteredRows.length}</strong>
+            <strong>{totalRows}</strong>
             <span>orders in range</span>
           </div>
         </div>
@@ -810,7 +871,7 @@ export function OrdersReport({ currentDate, deliveryDelayDays, initialRows }: Or
         <button className="ops-card" type="button" onClick={clearFilters}>
           <span>Total Orders</span>
           <strong>{operationsSummary.total}</strong>
-          <small>Clear filters</small>
+          <small>Loaded page · clear filters</small>
         </button>
         <button className={`ops-card urgent ${filters.delayStatus === "delayed" ? "active" : ""}`} type="button" onClick={showDelayedOrders}>
           <span>Delayed</span>
@@ -872,6 +933,7 @@ export function OrdersReport({ currentDate, deliveryDelayDays, initialRows }: Or
         <button
           className="button secondary"
           disabled={checkingStatuses}
+          aria-busy={checkingStatuses}
           type="button"
           onClick={checkDeliveryStatuses}
         >
@@ -883,6 +945,26 @@ export function OrdersReport({ currentDate, deliveryDelayDays, initialRows }: Or
           Export
         </button>
       </div>
+
+      {checkingStatuses ? (
+        <div className="running-state">
+          <RefreshCw aria-hidden="true" className="spin" size={18} />
+          <div>
+            <strong>Courier status sync is running</strong>
+            <p>Checking all pending orders one by one. Keep this page open while rows update.</p>
+          </div>
+        </div>
+      ) : null}
+
+      {loadingPage ? (
+        <div className="running-state">
+          <RefreshCw aria-hidden="true" className="spin" size={18} />
+          <div>
+            <strong>Loading page {page}</strong>
+            <p>Fetching only this page of orders from Supabase.</p>
+          </div>
+        </div>
+      ) : null}
 
       {duplicateTrackingIds.size ? (
         <div className="notice warning">
@@ -902,7 +984,7 @@ export function OrdersReport({ currentDate, deliveryDelayDays, initialRows }: Or
           </div>
           <div className="filter-console-count">
             <strong>{sortedRows.length}</strong>
-            <span>visible of {dateFilteredRows.length}</span>
+            <span>visible on this page</span>
           </div>
         </div>
 
@@ -980,7 +1062,7 @@ export function OrdersReport({ currentDate, deliveryDelayDays, initialRows }: Or
       <section className="panel">
         <div className="panel-header">
           <h2>Orders Report</h2>
-          <span className="badge ready">{sortedRows.length} rows</span>
+          <span className="badge ready">{sortedRows.length} shown · {totalRows} total</span>
         </div>
         <div className="table-wrap">
           <table className="orders-table">
@@ -1166,15 +1248,14 @@ export function OrdersReport({ currentDate, deliveryDelayDays, initialRows }: Or
       <div className="filter-summary">
         <Filter aria-hidden="true" size={16} />
         <span>
-          Showing {pageRows.length ? (safePage - 1) * pageSize + 1 : 0}-{Math.min(safePage * pageSize, sortedRows.length)}
-          {" "}of {sortedRows.length} filtered rows, {rows.length} total
+          Showing {pageRows.length} visible row{pageRows.length === 1 ? "" : "s"} on page {safePage}. {totalRows} orders in range.
         </span>
         <div className="pagination">
-          <button className="icon-button" type="button" disabled={safePage <= 1} onClick={() => setPage(Math.max(1, safePage - 1))} aria-label="Previous page">
+          <button className="icon-button" type="button" disabled={loadingPage || safePage <= 1} onClick={() => setPage(Math.max(1, safePage - 1))} aria-label="Previous page">
             <ChevronLeft aria-hidden="true" size={18} />
           </button>
           <span>Page {safePage} of {totalPages}</span>
-          <button className="icon-button" type="button" disabled={safePage >= totalPages} onClick={() => setPage(Math.min(totalPages, safePage + 1))} aria-label="Next page">
+          <button className="icon-button" type="button" disabled={loadingPage || safePage >= totalPages} onClick={() => setPage(Math.min(totalPages, safePage + 1))} aria-label="Next page">
             <ChevronRight aria-hidden="true" size={18} />
           </button>
         </div>

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { syncShopifyOrders } from "@/lib/sync/shopify-orders";
+import { runCombinedSync } from "@/lib/sync/combined-sync";
 
 const syncRequestSchema = z.object({
   afterOrderName: z.string().optional().or(z.literal(""))
@@ -21,11 +21,17 @@ export async function POST(request: Request) {
     );
   }
 
-  const result = await syncShopifyOrders({
+  const result = await runCombinedSync({
     afterOrderName: payload.data.afterOrderName || undefined
   });
 
-  return NextResponse.json(result, {
-    status: result.status === "Failed" ? 400 : 200
-  });
+  return NextResponse.json(
+    {
+      ok: result.status !== "Failed",
+      ...result
+    },
+    {
+      status: result.status === "Failed" ? 400 : 200
+    }
+  );
 }

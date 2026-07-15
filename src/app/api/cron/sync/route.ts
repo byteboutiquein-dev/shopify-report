@@ -11,7 +11,7 @@ export async function GET(request: Request) {
     return NextResponse.json(
       {
         ok: false,
-        message: "Unauthorized scheduled order sync request."
+        message: "Unauthorized scheduled combined sync request."
       },
       { status: 401 }
     );

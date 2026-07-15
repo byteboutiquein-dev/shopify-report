@@ -7,16 +7,19 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export type AppSettings = {
   deliveryDelayDays: number;
+  shopifyOrderRefreshDays: number;
   shopifyTrackingRefreshLimit: number;
 };
 
 const settingKeys = {
   deliveryDelayDays: "delivery_delay_days",
+  shopifyOrderRefreshDays: "shopify_order_refresh_days",
   shopifyTrackingRefreshLimit: "shopify_tracking_refresh_limit"
 } as const;
 
 const appSettingsSchema = z.object({
   deliveryDelayDays: z.coerce.number().int().min(1).max(30),
+  shopifyOrderRefreshDays: z.coerce.number().int().min(1).max(120),
   shopifyTrackingRefreshLimit: z.coerce.number().int().min(1).max(5000)
 });
 
@@ -30,6 +33,7 @@ export function getDefaultAppSettings(): AppSettings {
 
   return {
     deliveryDelayDays: 4,
+    shopifyOrderRefreshDays: 30,
     shopifyTrackingRefreshLimit: env.SHOPIFY_TRACKING_REFRESH_LIMIT
   };
 }
@@ -52,6 +56,7 @@ export async function getAppSettings(): Promise<AppSettings> {
     const valueByKey = new Map((response.data ?? []).map((row) => [row.key, row.value]));
     const parsed = appSettingsSchema.safeParse({
       deliveryDelayDays: valueByKey.get(settingKeys.deliveryDelayDays) ?? defaults.deliveryDelayDays,
+      shopifyOrderRefreshDays: valueByKey.get(settingKeys.shopifyOrderRefreshDays) ?? defaults.shopifyOrderRefreshDays,
       shopifyTrackingRefreshLimit:
         valueByKey.get(settingKeys.shopifyTrackingRefreshLimit) ?? defaults.shopifyTrackingRefreshLimit
     });
@@ -71,6 +76,11 @@ export async function saveAppSettings(input: AppSettings) {
         key: settingKeys.deliveryDelayDays,
         updated_at: new Date().toISOString(),
         value: String(parsed.deliveryDelayDays)
+      },
+      {
+        key: settingKeys.shopifyOrderRefreshDays,
+        updated_at: new Date().toISOString(),
+        value: String(parsed.shopifyOrderRefreshDays)
       },
       {
         key: settingKeys.shopifyTrackingRefreshLimit,

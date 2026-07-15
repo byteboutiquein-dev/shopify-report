@@ -47,7 +47,8 @@ select,
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
 }
 
@@ -70,6 +71,37 @@ textarea:disabled {
 .main {
   min-width: 0;
   padding: 28px;
+}
+
+.login-shell {
+  align-items: center;
+  display: grid;
+  min-height: calc(100dvh - 56px);
+  place-items: center;
+}
+
+.login-card {
+  background:
+    radial-gradient(circle at top left, rgba(47, 111, 94, 0.14), transparent 26rem),
+    #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  box-shadow: 0 30px 90px rgba(31, 38, 33, 0.14);
+  display: grid;
+  gap: 18px;
+  max-width: 460px;
+  padding: 28px;
+  width: min(100%, 460px);
+}
+
+.login-card h1 {
+  font-size: 42px;
+  letter-spacing: -0.05em;
+}
+
+.login-form {
+  display: grid;
+  gap: 14px;
 }
 
 .product-header {
@@ -120,6 +152,14 @@ textarea:disabled {
 
 .header-status-card strong {
   font-size: 15px;
+}
+
+.header-actions {
+  align-self: start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
 }
 
 .settings-drawer {
@@ -691,6 +731,31 @@ h1 {
   flex-wrap: wrap;
   gap: 10px 18px;
   margin-top: 12px;
+}
+
+.running-state {
+  align-items: start;
+  background:
+    linear-gradient(135deg, rgba(47, 111, 94, 0.11), rgba(255, 255, 255, 0.95)),
+    #ffffff;
+  border: 1px solid rgba(47, 111, 94, 0.28);
+  border-radius: 14px;
+  color: var(--text);
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 13px 14px;
+}
+
+.running-state strong {
+  display: block;
+  margin-bottom: 3px;
+}
+
+.running-state p {
+  color: var(--muted);
+  line-height: 1.45;
+  margin: 0;
 }
 
 .segmented {
@@ -1789,6 +1854,14 @@ th.sticky-col {
 
   .header-status-grid {
     grid-template-columns: 1fr;
+  }
+
+  .header-actions {
+    justify-content: stretch;
+  }
+
+  .header-actions > * {
+    flex: 1 1 auto;
   }
 
   .drawer-open-button {

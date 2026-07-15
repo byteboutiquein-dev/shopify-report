@@ -3,12 +3,20 @@ create table if not exists public.app_settings (
   value text not null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  constraint app_settings_key_check check (key in ('shopify_tracking_refresh_limit', 'delivery_delay_days'))
+  constraint app_settings_key_check check (key in ('shopify_tracking_refresh_limit', 'shopify_order_refresh_days', 'delivery_delay_days'))
 );
+
+alter table public.app_settings
+drop constraint if exists app_settings_key_check;
+
+alter table public.app_settings
+add constraint app_settings_key_check
+check (key in ('shopify_tracking_refresh_limit', 'shopify_order_refresh_days', 'delivery_delay_days'));
 
 insert into public.app_settings (key, value)
 values
   ('shopify_tracking_refresh_limit', '1000'),
+  ('shopify_order_refresh_days', '30'),
   ('delivery_delay_days', '4')
 on conflict (key) do nothing;
 

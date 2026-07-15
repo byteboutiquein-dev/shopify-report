@@ -43,7 +43,7 @@ export default async function HomePage() {
   const envStatus = getEnvStatus();
   const currentDate = currentDateInKolkata();
   const [report, syncLogs, trackingLogs, appSettings, baseline] = await Promise.all([
-    getOrdersReportRows(),
+    getOrdersReportRows({ page: 1, pageSize: 100 }),
     getRecentSyncLogs(8),
     getRecentTrackingCheckLogs(5),
     getAppSettings(),
@@ -56,8 +56,8 @@ export default async function HomePage() {
     <>
       <header className="product-header">
         <div className="product-title">
-          <p className="eyebrow">Courier Operations</p>
-          <h1>Shopify Courier Desk</h1>
+          <p className="eyebrow">Shopify Sync Report</p>
+          <h1>Kuviyal Tracking</h1>
           <p className="page-copy">See urgent shipments first, sync Shopify tracking, and follow up on delayed orders.</p>
         </div>
         <div className="header-status-grid" aria-label="Sync status">
@@ -72,7 +72,8 @@ export default async function HomePage() {
             <small>{latestTrackingSync ? `${latestTrackingSync.check_source} · ${latestTrackingSync.status}` : "No check yet"}</small>
           </div>
         </div>
-        <SettingsDrawer isReady={envStatus.missing.length === 0 && envStatus.isValid}>
+        <div className="header-actions">
+          <SettingsDrawer isReady={envStatus.missing.length === 0 && envStatus.isValid}>
           {envStatus.missing.length ? (
             <div className="notice error">
               <strong>Configuration needed</strong>
@@ -240,7 +241,9 @@ export default async function HomePage() {
               </section>
             </details>
           </section>
-        </SettingsDrawer>
+          </SettingsDrawer>
+          <a className="button secondary" href="/logout">Logout</a>
+        </div>
       </header>
 
       {report.error ? (
@@ -261,6 +264,7 @@ export default async function HomePage() {
           currentDate={currentDate}
           deliveryDelayDays={appSettings.deliveryDelayDays}
           initialRows={report.rows}
+          initialTotalRows={report.totalRows}
         />
       )}
 
