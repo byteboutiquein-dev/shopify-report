@@ -32,7 +32,6 @@ const envSchema = z.object({
   SHOPIFY_CLIENT_ID: optionalNonEmpty,
   SHOPIFY_CLIENT_SECRET: optionalNonEmpty,
   SHOPIFY_API_VERSION: optionalNonEmpty.default("2026-07"),
-  SHOPIFY_INCLUDE_CUSTOMERS: z.coerce.boolean().default(false),
   SHOPIFY_TRACKING_REFRESH_LIMIT: z.coerce.number().int().positive().default(1000),
   APP_DEFAULT_SYNC_DAYS: z.coerce.number().int().positive().default(30)
 });

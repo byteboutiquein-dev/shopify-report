@@ -196,6 +196,36 @@ export default async function HomePage() {
                             Finished: {formatDateTime(log.finished_at)}
                             {log.error_message ? ` · Error: ${log.error_message}` : ""}
                           </p>
+                          {log.items.some((item) => item.status === "Failed") ? (
+                            <div className="tracking-failure-list">
+                              <strong>Manual follow-up needed</strong>
+                              {log.items
+                                .filter((item) => item.status === "Failed")
+                                .slice(0, 10)
+                                .map((item) => (
+                                  <article className="tracking-failure-card" key={item.id}>
+                                    <div>
+                                      <span>Order</span>
+                                      <strong>{item.order_name ?? "Unknown order"}</strong>
+                                    </div>
+                                    <div>
+                                      <span>Courier</span>
+                                      <strong>{item.courier_name ?? "No courier"}</strong>
+                                    </div>
+                                    <div>
+                                      <span>Tracking ID</span>
+                                      <strong>{item.tracking_id ?? "No tracking ID"}</strong>
+                                    </div>
+                                    {item.tracking_url ? (
+                                      <a className="mini-button" href={item.tracking_url} rel="noreferrer" target="_blank">
+                                        Open
+                                      </a>
+                                    ) : null}
+                                    <p>{item.error_message ?? "Courier status could not be fetched."}</p>
+                                  </article>
+                                ))}
+                            </div>
+                          ) : null}
                           {log.items.length ? (
                             <div className="tracking-item-list">
                               {log.items.map((item) => (

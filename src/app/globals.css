@@ -1190,6 +1190,59 @@ table {
   margin-top: 10px;
 }
 
+.tracking-failure-list {
+  background: #fff8ef;
+  border: 1px solid #f1c892;
+  border-radius: 12px;
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 10px;
+}
+
+.tracking-failure-list > strong {
+  color: #8a4f11;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.tracking-failure-card {
+  align-items: start;
+  background: #ffffff;
+  border: 1px solid #f2d4ad;
+  border-radius: 10px;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  padding: 10px;
+}
+
+.tracking-failure-card div {
+  display: grid;
+  gap: 3px;
+}
+
+.tracking-failure-card span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.tracking-failure-card strong,
+.tracking-failure-card p {
+  overflow-wrap: anywhere;
+}
+
+.tracking-failure-card p {
+  color: var(--danger);
+  grid-column: 1 / -1;
+  line-height: 1.45;
+  margin: 0;
+}
+
 .tracking-item-card {
   background: #ffffff;
   border: 1px solid var(--border);
@@ -1955,6 +2008,10 @@ th.sticky-col {
 
   .form-actions {
     justify-content: start;
+  }
+
+  .tracking-failure-card {
+    grid-template-columns: 1fr;
   }
 
   .dashboard-date-filter {

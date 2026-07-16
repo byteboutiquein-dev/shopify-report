@@ -1,9 +1,8 @@
 import "server-only";
 
-import { getServerEnv } from "@/lib/env";
 import { shopifyGraphql } from "@/lib/shopify/client";
 
-function ordersQuery(includeCustomers: boolean) {
+function ordersQuery() {
   return `
   query OrdersForReport($first: Int!, $after: String, $query: String) {
     orders(first: $first, after: $after, query: $query, sortKey: CREATED_AT, reverse: true) {
@@ -16,14 +15,10 @@ function ordersQuery(includeCustomers: boolean) {
           updatedAt
           displayFinancialStatus
           displayFulfillmentStatus
-          ${
-            includeCustomers
-              ? `customer {
-            displayName
-            email
-            phone
-          }`
-              : ""
+          billingAddress {
+            firstName
+            lastName
+            name
           }
           totalPriceSet {
             shopMoney {
@@ -33,6 +28,9 @@ function ordersQuery(includeCustomers: boolean) {
           }
           shippingAddress {
             city
+            firstName
+            lastName
+            name
           }
           fulfillments(first: 5) {
             trackingInfo {
@@ -59,10 +57,10 @@ export type ShopifyOrderNode = {
   updatedAt: string;
   displayFinancialStatus: string | null;
   displayFulfillmentStatus: string | null;
-  customer: {
-    displayName: string | null;
-    email: string | null;
-    phone: string | null;
+  billingAddress: {
+    firstName: string | null;
+    lastName: string | null;
+    name: string | null;
   } | null;
   totalPriceSet: {
     shopMoney: {
@@ -72,6 +70,9 @@ export type ShopifyOrderNode = {
   };
   shippingAddress: {
     city: string | null;
+    firstName: string | null;
+    lastName: string | null;
+    name: string | null;
   } | null;
   fulfillments: Array<{
     trackingInfo: Array<{
@@ -123,8 +124,7 @@ export async function fetchShopifyOrders(input: FetchShopifyOrdersInput) {
   const pageSize = 100;
   const maxOrders = input.limit ?? 500;
   const query = buildShopifyDateQuery(input);
-  const env = getServerEnv();
-  const graphqlQuery = ordersQuery(env.SHOPIFY_INCLUDE_CUSTOMERS);
+  const graphqlQuery = ordersQuery();
 
   while (hasNextPage && orders.length < maxOrders) {
     const data: OrdersResponse = await shopifyGraphql<OrdersResponse>(graphqlQuery, {

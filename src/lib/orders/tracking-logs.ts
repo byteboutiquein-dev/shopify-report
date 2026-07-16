@@ -23,6 +23,7 @@ export type TrackingCheckLogItemRow = {
   previous_tracking_status: string | null;
   status: "Fetched" | "Updated" | "Skipped" | "Failed";
   tracking_id: string | null;
+  tracking_url: string | null;
 };
 
 export type TrackingCheckLogRow = {
@@ -73,6 +74,7 @@ export async function getRecentTrackingCheckLogs(limit = 5, itemLimit = 250) {
             "order_name",
             "courier_name",
             "tracking_id",
+            "tracking_url",
             "status",
             "checked_at",
             "previous_courier_date",

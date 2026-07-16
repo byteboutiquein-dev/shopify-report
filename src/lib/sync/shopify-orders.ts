@@ -93,12 +93,19 @@ function dateDaysAgo(days: number) {
   return date.toISOString().slice(0, 10);
 }
 
-function mapShopifyOrder(shopId: string, order: ShopifyOrderNode, includeCustomers: boolean) {
+function addressName(address: ShopifyOrderNode["shippingAddress"] | ShopifyOrderNode["billingAddress"]) {
+  const fullName = [address?.firstName, address?.lastName].filter(Boolean).join(" ").trim();
+  return address?.name?.trim() || fullName || null;
+}
+
+function mapShopifyOrder(shopId: string, order: ShopifyOrderNode) {
+  const customerName = addressName(order.shippingAddress) ?? addressName(order.billingAddress);
   const orderPayload: Record<string, string | number | null> = {
     shop_id: shopId,
     shopify_order_id: order.id,
     order_name: order.name,
     order_date: toOrderDate(order.createdAt),
+    customer_name: customerName,
     total_price: Number(order.totalPriceSet.shopMoney.amount),
     currency: order.totalPriceSet.shopMoney.currencyCode,
     financial_status: order.displayFinancialStatus,
@@ -107,12 +114,6 @@ function mapShopifyOrder(shopId: string, order: ShopifyOrderNode, includeCustome
     shopify_updated_at: order.updatedAt,
     last_synced_at: new Date().toISOString()
   };
-
-  if (includeCustomers) {
-    orderPayload.customer_name = order.customer?.displayName ?? null;
-    orderPayload.customer_email = order.customer?.email ?? null;
-    orderPayload.customer_phone = order.customer?.phone ?? null;
-  }
 
   return orderPayload;
 }
@@ -285,6 +286,38 @@ function mergeShopifyOrdersById(...orderGroups: ShopifyOrderNode[][]) {
   return [...orderById.values()];
 }
 
+async function refreshOrderDetailsFromShopifyOrders(
+  shopId: string,
+  shopifyOrders: ShopifyOrderNode[],
+  excludeShopifyIds = new Set<string>()
+) {
+  if (!shopifyOrders.length) {
+    return 0;
+  }
+
+  const existingOrders = await getExistingOrders(
+    shopId,
+    shopifyOrders.map((order) => order.id)
+  );
+  const existingShopifyIds = new Set(existingOrders.map((order) => order.shopify_order_id));
+  const orderPayload = shopifyOrders
+    .filter((order) => existingShopifyIds.has(order.id) && !excludeShopifyIds.has(order.id))
+    .map((order) => mapShopifyOrder(shopId, order));
+
+  if (!orderPayload.length) {
+    return 0;
+  }
+
+  const supabase = createServerSupabaseClient();
+  const response = await supabase.from("orders").upsert(orderPayload, { onConflict: "shop_id,shopify_order_id" });
+
+  if (response.error) {
+    throw new Error(response.error.message);
+  }
+
+  return orderPayload.length;
+}
+
 async function refreshTrackingFromShopifyOrders(shopId: string, shopifyOrders: ShopifyOrderNode[]) {
   const supabase = createServerSupabaseClient();
   const shopifyOrdersWithTracking = shopifyOrders.filter((order) => Boolean(getShopifyTrackingFields(order).trackingId));
@@ -420,7 +453,6 @@ export async function syncShopifyOrders(input: SyncInput): Promise<SyncResult> {
 
   try {
     const shop = await ensureShop();
-    const env = getServerEnv();
     const appSettings = await getAppSettings();
     syncLogId = await createSyncLog(syncType);
     const supabase = createServerSupabaseClient();
@@ -436,13 +468,14 @@ export async function syncShopifyOrders(input: SyncInput): Promise<SyncResult> {
         limit: appSettings.shopifyTrackingRefreshLimit,
         startDate: dateDaysAgo(appSettings.shopifyOrderRefreshDays)
       });
+      const orderDetailsUpdated = await refreshOrderDetailsFromShopifyOrders(shop.id, trackingRefreshOrders);
       const trackingRowsUpdated = await refreshTrackingFromShopifyOrders(shop.id, trackingRefreshOrders);
       const result = {
         baseline,
         status: "Success" as const,
         ordersChecked: 0,
         ordersInserted: 0,
-        ordersUpdated: 0
+        ordersUpdated: orderDetailsUpdated
       };
 
       await finishSyncLog(syncLogId, result);
@@ -450,15 +483,15 @@ export async function syncShopifyOrders(input: SyncInput): Promise<SyncResult> {
       return {
         ...result,
         message: baseline
-          ? `No new Shopify orders found after ${baseline.orderName}. Refreshed tracking for ${trackingRowsUpdated} orders from the last ${appSettings.shopifyOrderRefreshDays} days.`
-          : `No Shopify orders were found for initial sync. Refreshed tracking for ${trackingRowsUpdated} orders from the last ${appSettings.shopifyOrderRefreshDays} days.`
+          ? `No new Shopify orders found after ${baseline.orderName}. Refreshed order details for ${orderDetailsUpdated} orders and tracking for ${trackingRowsUpdated} orders from the last ${appSettings.shopifyOrderRefreshDays} days.`
+          : `No Shopify orders were found for initial sync. Refreshed order details for ${orderDetailsUpdated} orders and tracking for ${trackingRowsUpdated} orders from the last ${appSettings.shopifyOrderRefreshDays} days.`
       };
     }
 
     const shopifyIds = shopifyOrders.map((order) => order.id);
     const existingOrders = await getExistingOrders(shop.id, shopifyIds);
     const existingIds = new Set(existingOrders.map((order) => order.shopify_order_id));
-    const orderPayload = shopifyOrders.map((order) => mapShopifyOrder(shop.id, order, env.SHOPIFY_INCLUDE_CUSTOMERS));
+    const orderPayload = shopifyOrders.map((order) => mapShopifyOrder(shop.id, order));
     const upsertResponse = await supabase
       .from("orders")
       .upsert(orderPayload, { onConflict: "shop_id,shopify_order_id" })
@@ -514,9 +547,15 @@ export async function syncShopifyOrders(input: SyncInput): Promise<SyncResult> {
       limit: appSettings.shopifyTrackingRefreshLimit,
       startDate: dateDaysAgo(appSettings.shopifyOrderRefreshDays)
     });
+    const recentRefreshOrders = mergeShopifyOrdersById(shopifyOrders, trackingRefreshOrders);
+    const orderDetailsUpdated = await refreshOrderDetailsFromShopifyOrders(
+      shop.id,
+      recentRefreshOrders,
+      new Set(insertedOrders.map((order) => order.shopify_order_id))
+    );
     const trackingRowsUpdated = await refreshTrackingFromShopifyOrders(
       shop.id,
-      mergeShopifyOrdersById(shopifyOrders, trackingRefreshOrders)
+      recentRefreshOrders
     );
 
     const result = {
@@ -524,7 +563,7 @@ export async function syncShopifyOrders(input: SyncInput): Promise<SyncResult> {
       status: "Success" as const,
       ordersChecked: shopifyOrders.length,
       ordersInserted: insertedOrders.length,
-      ordersUpdated: shopifyOrders.length - insertedOrders.length
+      ordersUpdated: shopifyOrders.length - insertedOrders.length + orderDetailsUpdated
     };
 
     await finishSyncLog(syncLogId, result);
@@ -532,8 +571,8 @@ export async function syncShopifyOrders(input: SyncInput): Promise<SyncResult> {
     return {
       ...result,
       message: baseline
-        ? `Synced ${shopifyOrders.length} Shopify orders after ${baseline.orderName}. Refreshed tracking for ${trackingRowsUpdated} orders from the last ${appSettings.shopifyOrderRefreshDays} days.`
-        : `Synced ${shopifyOrders.length} Shopify orders. Refreshed tracking for ${trackingRowsUpdated} orders from the last ${appSettings.shopifyOrderRefreshDays} days.`
+        ? `Synced ${shopifyOrders.length} Shopify orders after ${baseline.orderName}. Refreshed order details for ${orderDetailsUpdated} orders and tracking for ${trackingRowsUpdated} orders from the last ${appSettings.shopifyOrderRefreshDays} days.`
+        : `Synced ${shopifyOrders.length} Shopify orders. Refreshed order details for ${orderDetailsUpdated} orders and tracking for ${trackingRowsUpdated} orders from the last ${appSettings.shopifyOrderRefreshDays} days.`
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown sync failure.";
