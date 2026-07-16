@@ -23,6 +23,13 @@ function currentDateInKolkata() {
   return `${valueByType.get("year")}-${valueByType.get("month")}-${valueByType.get("day")}`;
 }
 
+function addDaysToDateInput(value: string, days: number) {
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
 function formatDateTime(value: string | null) {
   if (!value) {
     return "-";
@@ -42,8 +49,10 @@ function formatValue(value: string | null) {
 export default async function HomePage() {
   const envStatus = getEnvStatus();
   const currentDate = currentDateInKolkata();
+  const initialStartDate = addDaysToDateInput(currentDate, -6);
+  const initialEndDate = currentDate;
   const [report, syncLogs, trackingLogs, appSettings, baseline] = await Promise.all([
-    getOrdersReportRows({ page: 1, pageSize: 100 }),
+    getOrdersReportRows({ endDate: initialEndDate, page: 1, pageSize: 100, startDate: initialStartDate }),
     getRecentSyncLogs(8),
     getRecentTrackingCheckLogs(5),
     getAppSettings(),
@@ -263,7 +272,9 @@ export default async function HomePage() {
         <OrdersReport
           currentDate={currentDate}
           deliveryDelayDays={appSettings.deliveryDelayDays}
+          initialEndDate={initialEndDate}
           initialRows={report.rows}
+          initialStartDate={initialStartDate}
           initialTotalRows={report.totalRows}
         />
       )}

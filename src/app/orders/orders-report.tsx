@@ -11,7 +11,9 @@ import { statusOptions } from "@/lib/status-options";
 type OrdersReportProps = {
   currentDate: string;
   deliveryDelayDays: number;
+  initialEndDate: string;
   initialRows: ReportRow[];
+  initialStartDate: string;
   initialTotalRows: number;
 };
 
@@ -33,6 +35,8 @@ type Filters = {
   deliveryStatus: string;
   delayStatus: string;
 };
+
+type DateRangePreset = "today" | "last-7" | "this-month" | "custom";
 
 type Draft = {
   courierDate: string;
@@ -107,15 +111,20 @@ const orderTableColumns = [
   "DETAILS"
 ] as const;
 
-const emptyFilters: Filters = {
+const emptyFilters = {
   focusStatus: "",
   search: "",
-  startDate: "",
-  endDate: "",
   courierName: "",
   deliveryStatus: "",
   delayStatus: ""
-};
+} satisfies Omit<Filters, "startDate" | "endDate">;
+
+const dateRangeOptions: Array<{ label: string; value: DateRangePreset }> = [
+  { label: "Today", value: "today" },
+  { label: "Last 7 days", value: "last-7" },
+  { label: "This month", value: "this-month" },
+  { label: "Custom", value: "custom" }
+];
 
 function isMessageSent(status: string) {
   return status === "Sent" || status === "Received";
@@ -265,11 +274,32 @@ function buildExportFilename(filters: Filters) {
   return `shopify-orders-${datePart}.csv`;
 }
 
-function formatDateInput(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+function addDaysToDateInput(value: string, days: number) {
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function getDateRangeForPreset(preset: Exclude<DateRangePreset, "custom">, currentDate: string) {
+  if (preset === "today") {
+    return {
+      endDate: currentDate,
+      startDate: currentDate
+    };
+  }
+
+  if (preset === "this-month") {
+    return {
+      endDate: currentDate,
+      startDate: `${currentDate.slice(0, 8)}01`
+    };
+  }
+
+  return {
+    endDate: currentDate,
+    startDate: addDaysToDateInput(currentDate, -6)
+  };
 }
 
 function orderNumber(orderId: string) {
@@ -331,10 +361,22 @@ function sortRows(rows: ReportRow[], sortKey: SortKey, currentDate: string, deli
   });
 }
 
-export function OrdersReport({ currentDate, deliveryDelayDays, initialRows, initialTotalRows }: OrdersReportProps) {
+export function OrdersReport({
+  currentDate,
+  deliveryDelayDays,
+  initialEndDate,
+  initialRows,
+  initialStartDate,
+  initialTotalRows
+}: OrdersReportProps) {
   const [rows, setRows] = useState(initialRows);
   const [totalRows, setTotalRows] = useState(initialTotalRows);
-  const [filters, setFilters] = useState<Filters>(emptyFilters);
+  const [dateRangePreset, setDateRangePreset] = useState<DateRangePreset>("last-7");
+  const [filters, setFilters] = useState<Filters>({
+    ...emptyFilters,
+    endDate: initialEndDate,
+    startDate: initialStartDate
+  });
   const [sortKey, setSortKey] = useState<SortKey>("date-desc");
   const [pageSize, setPageSize] = useState<(typeof pageSizeOptions)[number]>(100);
   const [page, setPage] = useState(1);
@@ -414,6 +456,10 @@ export function OrdersReport({ currentDate, deliveryDelayDays, initialRows, init
 
     return new Map([...counts.entries()].filter(([, orderIds]) => orderIds.length > 1));
   }, [rows]);
+  const duplicateTrackingEntries = useMemo(
+    () => [...duplicateTrackingIds.entries()].map(([trackingId, orderIds]) => ({ orderIds, trackingId })),
+    [duplicateTrackingIds]
+  );
   const dateFilteredRows = useMemo(() => {
     return rows.filter((row) => {
       const startMatches = !filters.startDate || row.date >= filters.startDate;
@@ -542,6 +588,11 @@ export function OrdersReport({ currentDate, deliveryDelayDays, initialRows, init
     setPage(1);
   }
 
+  function updateCustomDate(key: "startDate" | "endDate", value: string) {
+    setDateRangePreset("custom");
+    updateFilter(key, value);
+  }
+
   function inlineDraftFor(row: ReportRow) {
     return inlineDrafts[row.id] ?? {
       courierCharge: row.courierCharge === null ? "" : String(row.courierCharge),
@@ -607,7 +658,11 @@ export function OrdersReport({ currentDate, deliveryDelayDays, initialRows, init
   }
 
   function clearFilters() {
-    setFilters(emptyFilters);
+    setFilters((current) => ({
+      ...emptyFilters,
+      endDate: current.endDate,
+      startDate: current.startDate
+    }));
     setSortKey("date-desc");
     setPage(1);
   }
@@ -632,23 +687,16 @@ export function OrdersReport({ currentDate, deliveryDelayDays, initialRows, init
     setPage(1);
   }
 
-  function setDateRange(range: "today" | "last-7" | "this-month") {
-    const today = new Date();
-    const start = new Date(today);
+  function setDateRange(range: DateRangePreset) {
+    setDateRangePreset(range);
 
-    if (range === "last-7") {
-      start.setDate(today.getDate() - 6);
+    if (range !== "custom") {
+      setFilters((current) => ({
+        ...current,
+        ...getDateRangeForPreset(range, currentDate)
+      }));
     }
 
-    if (range === "this-month") {
-      start.setDate(1);
-    }
-
-    setFilters((current) => ({
-      ...current,
-      startDate: formatDateInput(start),
-      endDate: formatDateInput(today)
-    }));
     setPage(1);
   }
 
@@ -843,23 +891,30 @@ export function OrdersReport({ currentDate, deliveryDelayDays, initialRows, init
     <>
       <section className="dashboard-date-filter" aria-label="Dashboard date range">
         <div>
-          <p className="eyebrow">Dashboard Date Range</p>
-          <h2>Choose the orders shown in the cards</h2>
-        </div>
-        <div className="quick-actions" aria-label="Quick date ranges">
-          <button type="button" onClick={() => setDateRange("today")}>Today</button>
-          <button type="button" onClick={() => setDateRange("last-7")}>Last 7 days</button>
-          <button type="button" onClick={() => setDateRange("this-month")}>This month</button>
+          <p className="eyebrow">Time Filter</p>
+          <h2>Dashboard and table use this range</h2>
         </div>
         <div className="dashboard-date-fields">
           <label className="field compact">
-            <span>Start</span>
-            <input type="date" value={filters.startDate} onChange={(event) => updateFilter("startDate", event.target.value)} />
+            <span>Range</span>
+            <select value={dateRangePreset} onChange={(event) => setDateRange(event.target.value as DateRangePreset)}>
+              {dateRangeOptions.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
           </label>
-          <label className="field compact">
-            <span>End</span>
-            <input type="date" value={filters.endDate} onChange={(event) => updateFilter("endDate", event.target.value)} />
-          </label>
+          {dateRangePreset === "custom" ? (
+            <>
+              <label className="field compact">
+                <span>Start</span>
+                <input type="date" value={filters.startDate} onChange={(event) => updateCustomDate("startDate", event.target.value)} />
+              </label>
+              <label className="field compact">
+                <span>End</span>
+                <input type="date" value={filters.endDate} onChange={(event) => updateCustomDate("endDate", event.target.value)} />
+              </label>
+            </>
+          ) : null}
           <div className="filter-console-count">
             <strong>{totalRows}</strong>
             <span>orders in range</span>
@@ -870,8 +925,8 @@ export function OrdersReport({ currentDate, deliveryDelayDays, initialRows, init
       <section className="ops-summary" aria-label="Operational priorities">
         <button className="ops-card" type="button" onClick={clearFilters}>
           <span>Total Orders</span>
-          <strong>{operationsSummary.total}</strong>
-          <small>Loaded page · clear filters</small>
+          <strong>{totalRows}</strong>
+          <small>Selected range · clear filters</small>
         </button>
         <button className={`ops-card urgent ${filters.delayStatus === "delayed" ? "active" : ""}`} type="button" onClick={showDelayedOrders}>
           <span>Delayed</span>
@@ -966,13 +1021,23 @@ export function OrdersReport({ currentDate, deliveryDelayDays, initialRows, init
         </div>
       ) : null}
 
-      {duplicateTrackingIds.size ? (
+      {duplicateTrackingEntries.length ? (
         <div className="notice warning">
           <strong>Duplicate tracking IDs found</strong>
-          <p>
-            {duplicateTrackingIds.size} tracking ID{duplicateTrackingIds.size === 1 ? "" : "s"} appear on multiple
-            orders. Use search to review them.
-          </p>
+          <p>{duplicateTrackingEntries.length} tracking ID{duplicateTrackingEntries.length === 1 ? "" : "s"} appear on multiple orders in this loaded page.</p>
+          <div className="duplicate-tracking-list">
+            {duplicateTrackingEntries.slice(0, 5).map((entry) => (
+              <button
+                className="duplicate-tracking-chip"
+                key={entry.trackingId}
+                type="button"
+                onClick={() => updateFilter("search", entry.trackingId)}
+              >
+                <strong>{entry.trackingId}</strong>
+                <span>{entry.orderIds.join(", ")}</span>
+              </button>
+            ))}
+          </div>
         </div>
       ) : null}
 

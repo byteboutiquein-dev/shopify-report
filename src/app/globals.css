@@ -725,6 +725,40 @@ h1 {
   border-color: #e5c873;
 }
 
+.duplicate-tracking-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.duplicate-tracking-chip {
+  align-items: flex-start;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid #e5c873;
+  border-radius: 12px;
+  color: var(--text);
+  display: grid;
+  gap: 3px;
+  padding: 9px 11px;
+  text-align: left;
+}
+
+.duplicate-tracking-chip strong {
+  margin: 0;
+}
+
+.duplicate-tracking-chip span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.duplicate-tracking-chip:hover {
+  border-color: #c68a22;
+  color: #8a5b10;
+}
+
 .result-grid {
   color: var(--muted);
   display: flex;
@@ -802,7 +836,7 @@ h1 {
   box-shadow: var(--shadow);
   display: grid;
   gap: 14px;
-  grid-template-columns: minmax(220px, 1fr) auto minmax(320px, auto);
+  grid-template-columns: minmax(220px, 1fr) minmax(260px, auto);
   margin-bottom: 16px;
   padding: 16px;
 }
@@ -815,9 +849,14 @@ h1 {
 
 .dashboard-date-fields {
   align-items: end;
-  display: grid;
+  display: flex;
+  flex-wrap: wrap;
   gap: 10px;
-  grid-template-columns: repeat(2, minmax(132px, 1fr)) auto;
+  justify-content: flex-end;
+}
+
+.dashboard-date-fields .field {
+  flex: 0 1 170px;
 }
 
 .filter-console {
@@ -1924,7 +1963,12 @@ th.sticky-col {
   }
 
   .dashboard-date-fields {
-    grid-template-columns: 1fr;
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .dashboard-date-fields .field {
+    flex-basis: auto;
   }
 
   .table-wrap {
