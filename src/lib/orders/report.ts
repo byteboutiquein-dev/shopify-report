@@ -81,6 +81,31 @@ export type OrdersReportPageInput = {
   sortKey?: ReportSortKey;
 };
 
+export type OrdersReportSummary = {
+  delayed: number;
+  delivered: number;
+  inTransit: number;
+  notShipped: number;
+  reviewPending: number;
+  total: number;
+};
+
+export type OrdersReportSummaryInput = {
+  currentDate: string;
+  deliveryDelayDays: number;
+  startDate?: string;
+  endDate?: string;
+};
+
+const emptyReportSummary: OrdersReportSummary = {
+  delayed: 0,
+  delivered: 0,
+  inTransit: 0,
+  notShipped: 0,
+  reviewPending: 0,
+  total: 0
+};
+
 function firstJoin<T>(value: T | T[] | null | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
@@ -175,6 +200,84 @@ async function getLatestComments(orderIds: string[], commentType: "Review" | "Co
   return commentsByOrder;
 }
 
+function isMessageSent(status: string) {
+  return status === "Sent" || status === "Received";
+}
+
+function deliveryStatusForReportRow(row: ReportRow) {
+  if (!row.trackingId.trim() && row.deliveryStatus === "Pending") {
+    return "Not Shipped";
+  }
+
+  if (row.trackingId.trim() && row.deliveryStatus === "Pending") {
+    return "Shipped";
+  }
+
+  return row.deliveryStatus;
+}
+
+function dateOnlyTime(value: string) {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+
+  if (!match) {
+    return null;
+  }
+
+  return Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+}
+
+function daysBetweenDates(startDate: string, endDate: string) {
+  const start = dateOnlyTime(startDate);
+  const end = dateOnlyTime(endDate);
+
+  if (start === null || end === null) {
+    return 0;
+  }
+
+  return Math.floor((end - start) / 86_400_000);
+}
+
+function isDelayedReportRow(row: ReportRow, currentDate: string, deliveryDelayDays: number) {
+  return Boolean(
+    row.courierDate &&
+      deliveryStatusForReportRow(row) !== "Delivered" &&
+      daysBetweenDates(row.courierDate, currentDate) >= deliveryDelayDays
+  );
+}
+
+function summarizeReportRows(rows: ReportRow[], input: OrdersReportSummaryInput): OrdersReportSummary {
+  return rows.reduce<OrdersReportSummary>(
+    (summary, row) => {
+      const deliveryStatus = deliveryStatusForReportRow(row);
+
+      summary.total += 1;
+
+      if (isDelayedReportRow(row, input.currentDate, input.deliveryDelayDays)) {
+        summary.delayed += 1;
+      }
+
+      if (deliveryStatus === "Not Shipped") {
+        summary.notShipped += 1;
+      }
+
+      if (deliveryStatus === "In Transit" || deliveryStatus === "Shipped") {
+        summary.inTransit += 1;
+      }
+
+      if (deliveryStatus === "Delivered") {
+        summary.delivered += 1;
+      }
+
+      if (!isMessageSent(row.reviewText)) {
+        summary.reviewPending += 1;
+      }
+
+      return summary;
+    },
+    { ...emptyReportSummary }
+  );
+}
+
 export async function getOrdersReportRows(input: OrdersReportPageInput = {}) {
   try {
     const supabase = createServerSupabaseClient();
@@ -235,6 +338,56 @@ export async function getOrdersReportRows(input: OrdersReportPageInput = {}) {
       rows: [],
       totalRows: 0,
       error: error instanceof Error ? error.message : "Could not load order report."
+    };
+  }
+}
+
+export async function getOrdersReportSummary(input: OrdersReportSummaryInput) {
+  try {
+    const supabase = createServerSupabaseClient();
+    const pageSize = 1000;
+    const orders: OrderQueryRow[] = [];
+
+    for (let from = 0; ; from += pageSize) {
+      let query = supabase
+        .from("orders")
+        .select(reportSelect)
+        .order("order_date", { ascending: false })
+        .order("order_name", { ascending: false });
+
+      if (input.startDate) {
+        query = query.gte("order_date", input.startDate);
+      }
+
+      if (input.endDate) {
+        query = query.lte("order_date", input.endDate);
+      }
+
+      const ordersResponse = await query.range(from, from + pageSize - 1).returns<OrderQueryRow[]>();
+
+      if (ordersResponse.error) {
+        return {
+          error: ordersResponse.error.message,
+          summary: { ...emptyReportSummary }
+        };
+      }
+
+      const page = ordersResponse.data ?? [];
+      orders.push(...page);
+
+      if (page.length < pageSize) {
+        break;
+      }
+    }
+
+    return {
+      error: null,
+      summary: summarizeReportRows(mapReportRows(orders, new Map(), new Map()), input)
+    };
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : "Could not load order summary.",
+      summary: { ...emptyReportSummary }
     };
   }
 }

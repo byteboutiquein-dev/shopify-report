@@ -4,7 +4,7 @@ import { SettingsDrawer } from "@/app/settings/settings-drawer";
 import { SyncControls } from "@/app/sync/sync-controls";
 import { getAppSettings } from "@/lib/app-settings";
 import { getEnvStatus } from "@/lib/env";
-import { getOrdersReportRows } from "@/lib/orders/report";
+import { getOrdersReportRows, getOrdersReportSummary } from "@/lib/orders/report";
 import { getRecentTrackingCheckLogs } from "@/lib/orders/tracking-logs";
 import { getRecentSyncLogs } from "@/lib/sync/logs";
 import { getSyncBaseline } from "@/lib/sync/shopify-orders";
@@ -51,11 +51,17 @@ export default async function HomePage() {
   const currentDate = currentDateInKolkata();
   const initialStartDate = addDaysToDateInput(currentDate, -6);
   const initialEndDate = currentDate;
-  const [report, syncLogs, trackingLogs, appSettings, baseline] = await Promise.all([
+  const appSettings = await getAppSettings();
+  const [report, summary, syncLogs, trackingLogs, baseline] = await Promise.all([
     getOrdersReportRows({ endDate: initialEndDate, page: 1, pageSize: 100, startDate: initialStartDate }),
+    getOrdersReportSummary({
+      currentDate,
+      deliveryDelayDays: appSettings.deliveryDelayDays,
+      endDate: initialEndDate,
+      startDate: initialStartDate
+    }),
     getRecentSyncLogs(8),
     getRecentTrackingCheckLogs(5),
-    getAppSettings(),
     getSyncBaseline()
   ]);
   const latestOrderSync = syncLogs.logs[0] ?? null;
@@ -304,6 +310,7 @@ export default async function HomePage() {
           deliveryDelayDays={appSettings.deliveryDelayDays}
           initialEndDate={initialEndDate}
           initialRows={report.rows}
+          initialSummary={summary.summary}
           initialStartDate={initialStartDate}
           initialTotalRows={report.totalRows}
         />

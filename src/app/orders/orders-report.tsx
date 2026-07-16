@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Download, Filter, Info, RefreshCw, Search, X } from "lucide-react";
 
-import type { ReportRow } from "@/lib/orders/report";
+import type { OrdersReportSummary, ReportRow } from "@/lib/orders/report";
 import { resolveTrackingUrl, supportedCourierOptions } from "@/lib/courier/tracking-links";
 import { reportColumns } from "@/lib/report/columns";
 import { statusOptions } from "@/lib/status-options";
@@ -13,6 +13,7 @@ type OrdersReportProps = {
   deliveryDelayDays: number;
   initialEndDate: string;
   initialRows: ReportRow[];
+  initialSummary: OrdersReportSummary;
   initialStartDate: string;
   initialTotalRows: number;
 };
@@ -36,7 +37,7 @@ type Filters = {
   delayStatus: string;
 };
 
-type DateRangePreset = "today" | "last-7" | "this-month" | "custom";
+type DateRangePreset = "today" | "last-7" | "last-14" | "last-30" | "this-month" | "last-month" | "custom";
 
 type Draft = {
   courierDate: string;
@@ -85,6 +86,7 @@ type ReportPageResponse = {
   ok: boolean;
   message?: string;
   rows?: ReportRow[];
+  summary?: OrdersReportSummary;
   totalRows?: number;
 };
 
@@ -122,7 +124,10 @@ const emptyFilters = {
 const dateRangeOptions: Array<{ label: string; value: DateRangePreset }> = [
   { label: "Today", value: "today" },
   { label: "Last 7 days", value: "last-7" },
+  { label: "Last 14 days", value: "last-14" },
+  { label: "Last 30 days", value: "last-30" },
   { label: "This month", value: "this-month" },
+  { label: "Last month", value: "last-month" },
   { label: "Custom", value: "custom" }
 ];
 
@@ -281,6 +286,10 @@ function addDaysToDateInput(value: string, days: number) {
   return date.toISOString().slice(0, 10);
 }
 
+function formatDateInput(date: Date) {
+  return date.toISOString().slice(0, 10);
+}
+
 function getDateRangeForPreset(preset: Exclude<DateRangePreset, "custom">, currentDate: string) {
   if (preset === "today") {
     return {
@@ -293,6 +302,31 @@ function getDateRangeForPreset(preset: Exclude<DateRangePreset, "custom">, curre
     return {
       endDate: currentDate,
       startDate: `${currentDate.slice(0, 8)}01`
+    };
+  }
+
+  if (preset === "last-month") {
+    const [year, month] = currentDate.split("-").map(Number);
+    const start = new Date(Date.UTC(year, month - 2, 1));
+    const end = new Date(Date.UTC(year, month - 1, 0));
+
+    return {
+      endDate: formatDateInput(end),
+      startDate: formatDateInput(start)
+    };
+  }
+
+  if (preset === "last-14") {
+    return {
+      endDate: currentDate,
+      startDate: addDaysToDateInput(currentDate, -13)
+    };
+  }
+
+  if (preset === "last-30") {
+    return {
+      endDate: currentDate,
+      startDate: addDaysToDateInput(currentDate, -29)
     };
   }
 
@@ -366,10 +400,12 @@ export function OrdersReport({
   deliveryDelayDays,
   initialEndDate,
   initialRows,
+  initialSummary,
   initialStartDate,
   initialTotalRows
 }: OrdersReportProps) {
   const [rows, setRows] = useState(initialRows);
+  const [rangeSummary, setRangeSummary] = useState(initialSummary);
   const [totalRows, setTotalRows] = useState(initialTotalRows);
   const [dateRangePreset, setDateRangePreset] = useState<DateRangePreset>("last-7");
   const [filters, setFilters] = useState<Filters>({
@@ -396,6 +432,8 @@ export function OrdersReport({
 
     const controller = new AbortController();
     const params = new URLSearchParams({
+      currentDate,
+      deliveryDelayDays: String(deliveryDelayDays),
       page: String(page),
       pageSize: String(pageSize),
       sortKey
@@ -420,6 +458,14 @@ export function OrdersReport({
 
         setRows(data.rows);
         setTotalRows(data.totalRows ?? data.rows.length);
+        setRangeSummary(data.summary ?? {
+          delayed: 0,
+          delivered: 0,
+          inTransit: 0,
+          notShipped: 0,
+          reviewPending: 0,
+          total: data.totalRows ?? data.rows.length
+        });
         setSelectedOrderId((current) => (current && data.rows?.some((row) => row.id === current) ? current : null));
       } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") {
@@ -440,7 +486,7 @@ export function OrdersReport({
     void loadPage();
 
     return () => controller.abort();
-  }, [filters.endDate, filters.startDate, page, pageSize, sortKey]);
+  }, [currentDate, deliveryDelayDays, filters.endDate, filters.startDate, page, pageSize, sortKey]);
   const duplicateTrackingIds = useMemo(() => {
     const counts = new Map<string, string[]>();
 
@@ -467,46 +513,6 @@ export function OrdersReport({
       return startMatches && endMatches;
     });
   }, [filters.endDate, filters.startDate, rows]);
-  const operationsSummary = useMemo(() => {
-    return dateFilteredRows.reduce(
-      (summary, row) => {
-        const deliveryStatus = deliveryStatusForRow(row);
-
-        summary.total += 1;
-
-        if (isDelayedOrder(row, currentDate, deliveryDelayDays)) {
-          summary.delayed += 1;
-        }
-
-        if (deliveryStatus === "Not Shipped") {
-          summary.notShipped += 1;
-        }
-
-        if (deliveryStatus === "In Transit" || deliveryStatus === "Shipped") {
-          summary.inTransit += 1;
-        }
-
-        if (deliveryStatus === "Delivered") {
-          summary.delivered += 1;
-        }
-
-        if (!isMessageSent(row.reviewText)) {
-          summary.reviewPending += 1;
-        }
-
-        return summary;
-      },
-      {
-        delayed: 0,
-        delivered: 0,
-        inTransit: 0,
-        notShipped: 0,
-        reviewPending: 0,
-        total: 0
-      }
-    );
-  }, [currentDate, dateFilteredRows, deliveryDelayDays]);
-
   const filteredRows = useMemo(() => {
     const search = filters.search.trim().toLowerCase();
     return dateFilteredRows.filter((row) => {
@@ -916,7 +922,7 @@ export function OrdersReport({
             </>
           ) : null}
           <div className="filter-console-count">
-            <strong>{totalRows}</strong>
+            <strong>{rangeSummary.total}</strong>
             <span>orders in range</span>
           </div>
         </div>
@@ -925,12 +931,12 @@ export function OrdersReport({
       <section className="ops-summary" aria-label="Operational priorities">
         <button className="ops-card" type="button" onClick={clearFilters}>
           <span>Total Orders</span>
-          <strong>{totalRows}</strong>
+          <strong>{rangeSummary.total}</strong>
           <small>Selected range · clear filters</small>
         </button>
         <button className={`ops-card urgent ${filters.delayStatus === "delayed" ? "active" : ""}`} type="button" onClick={showDelayedOrders}>
           <span>Delayed</span>
-          <strong>{operationsSummary.delayed}</strong>
+          <strong>{rangeSummary.delayed}</strong>
           <small>{deliveryDelayDays}+ days after courier date</small>
         </button>
         <button
@@ -939,7 +945,7 @@ export function OrdersReport({
           onClick={() => showDeliveryStatus("Not Shipped")}
         >
           <span>Not Shipped</span>
-          <strong>{operationsSummary.notShipped}</strong>
+          <strong>{rangeSummary.notShipped}</strong>
           <small>Needs fulfillment/tracking</small>
         </button>
         <button
@@ -948,7 +954,7 @@ export function OrdersReport({
           onClick={showMovingOrders}
         >
           <span>In Transit</span>
-          <strong>{operationsSummary.inTransit}</strong>
+          <strong>{rangeSummary.inTransit}</strong>
           <small>Shipped or moving</small>
         </button>
         <button
@@ -957,7 +963,7 @@ export function OrdersReport({
           onClick={() => showDeliveryStatus("Delivered")}
         >
           <span>Delivered</span>
-          <strong>{operationsSummary.delivered}</strong>
+          <strong>{rangeSummary.delivered}</strong>
           <small>Completed shipments</small>
         </button>
         <button
@@ -966,7 +972,7 @@ export function OrdersReport({
           onClick={showReviewPending}
         >
           <span>Review Pending</span>
-          <strong>{operationsSummary.reviewPending}</strong>
+          <strong>{rangeSummary.reviewPending}</strong>
           <small>Needs review TXT</small>
         </button>
       </section>
