@@ -32,6 +32,12 @@ function ordersQuery() {
             lastName
             name
           }
+          shippingChargeMetafield: metafield(namespace: "custom", key: "shipping_charge") {
+            key
+            namespace
+            type
+            value
+          }
           fulfillments(first: 5) {
             trackingInfo {
               company
@@ -49,6 +55,13 @@ function ordersQuery() {
   }
 `;
 }
+
+type ShopifyMetafield = {
+  key: string;
+  namespace: string;
+  type: string;
+  value: string;
+} | null;
 
 export type ShopifyOrderNode = {
   id: string;
@@ -74,6 +87,7 @@ export type ShopifyOrderNode = {
     lastName: string | null;
     name: string | null;
   } | null;
+  shippingChargeMetafield: ShopifyMetafield;
   fulfillments: Array<{
     trackingInfo: Array<{
       company: string | null;

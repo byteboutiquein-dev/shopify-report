@@ -46,6 +46,7 @@ type SyncBaselineRecord = {
 };
 
 type TrackingRecord = {
+  courier_charge: number | null;
   courier_name: string | null;
   order_id: string;
   tracking_id: string | null;
@@ -54,6 +55,7 @@ type TrackingRecord = {
 };
 
 type ShopifyTrackingFields = {
+  courierCharge: number | null;
   courierName: string | null;
   trackingId: string | null;
   trackingUrl: string | null;
@@ -73,10 +75,33 @@ function getFirstTracking(order: ShopifyOrderNode) {
   return order.fulfillments.flatMap((fulfillment) => fulfillment.trackingInfo)[0];
 }
 
+function parseMoneyMetafield(value: string | null | undefined) {
+  if (!value) {
+    return null;
+  }
+
+  const normalized = value.replace(/,/g, "").trim();
+  const direct = Number(normalized);
+
+  if (Number.isFinite(direct) && direct >= 0) {
+    return direct;
+  }
+
+  const match = normalized.match(/\d+(?:\.\d+)?/);
+  const amount = match ? Number(match[0]) : Number.NaN;
+
+  return Number.isFinite(amount) && amount >= 0 ? amount : null;
+}
+
+function getShippingCharge(order: ShopifyOrderNode) {
+  return parseMoneyMetafield(order.shippingChargeMetafield?.value);
+}
+
 function getShopifyTrackingFields(order: ShopifyOrderNode): ShopifyTrackingFields {
   const tracking = getFirstTracking(order);
 
   return {
+    courierCharge: getShippingCharge(order),
     courierName: tracking?.company?.trim() || null,
     trackingId: tracking?.number?.trim() || null,
     trackingUrl: resolveTrackingUrl(tracking?.company, tracking?.number, tracking?.url)
@@ -320,7 +345,10 @@ async function refreshOrderDetailsFromShopifyOrders(
 
 async function refreshTrackingFromShopifyOrders(shopId: string, shopifyOrders: ShopifyOrderNode[]) {
   const supabase = createServerSupabaseClient();
-  const shopifyOrdersWithTracking = shopifyOrders.filter((order) => Boolean(getShopifyTrackingFields(order).trackingId));
+  const shopifyOrdersWithTracking = shopifyOrders.filter((order) => {
+    const tracking = getShopifyTrackingFields(order);
+    return Boolean(tracking.trackingId || tracking.courierCharge !== null);
+  });
 
   if (!shopifyOrdersWithTracking.length) {
     return 0;
@@ -350,7 +378,7 @@ async function refreshTrackingFromShopifyOrders(shopId: string, shopifyOrders: S
   for (const orderIds of chunkValues([...trackingByOrderId.keys()], 50)) {
     const existingTracking = await supabase
       .from("order_tracking")
-      .select("order_id, courier_name, tracking_id, tracking_status, tracking_url")
+      .select("order_id, courier_charge, courier_name, tracking_id, tracking_status, tracking_url")
       .in("order_id", orderIds)
       .returns<TrackingRecord[]>();
 
@@ -361,10 +389,11 @@ async function refreshTrackingFromShopifyOrders(shopId: string, shopifyOrders: S
     const existingOrderIds = new Set((existingTracking.data ?? []).map((row) => row.order_id));
     const missingRows = orderIds.filter((orderId) => !existingOrderIds.has(orderId));
     type TrackingInsertRow = {
+      courier_charge: number | null;
       courier_name: string | null;
       delivery_status: string;
       order_id: string;
-      tracking_id: string;
+      tracking_id: string | null;
       tracking_status: string;
       tracking_url: string | null;
     };
@@ -374,16 +403,17 @@ async function refreshTrackingFromShopifyOrders(shopId: string, shopifyOrders: S
         .map((orderId) => {
           const tracking = trackingByOrderId.get(orderId);
 
-          if (!tracking?.trackingId) {
+          if (!tracking || (!tracking.trackingId && tracking.courierCharge === null)) {
             return null;
           }
 
           return {
+            courier_charge: tracking.courierCharge,
             courier_name: tracking.courierName,
             delivery_status: "Pending",
             order_id: orderId,
             tracking_id: tracking.trackingId,
-            tracking_status: "Sent",
+            tracking_status: tracking.trackingId ? "Sent" : "Pending",
             tracking_url: tracking.trackingUrl
           };
         })
@@ -403,13 +433,13 @@ async function refreshTrackingFromShopifyOrders(shopId: string, shopifyOrders: S
     const rowsToUpdate = (existingTracking.data ?? []).flatMap((row) => {
       const tracking = trackingByOrderId.get(row.order_id);
 
-      if (!tracking?.trackingId) {
+      if (!tracking) {
         return [];
       }
 
-      const payload: Partial<Record<keyof TrackingRecord, string | null>> = {};
+      const payload: Partial<Record<keyof TrackingRecord, string | number | null>> = {};
 
-      if (!row.tracking_id?.trim()) {
+      if (!row.tracking_id?.trim() && tracking.trackingId) {
         payload.tracking_id = tracking.trackingId;
         payload.tracking_status = "Sent";
       }
@@ -420,6 +450,10 @@ async function refreshTrackingFromShopifyOrders(shopId: string, shopifyOrders: S
 
       if ((!row.courier_name?.trim() || /^other$/i.test(row.courier_name)) && tracking.courierName) {
         payload.courier_name = tracking.courierName;
+      }
+
+      if (tracking.courierCharge !== null && row.courier_charge !== tracking.courierCharge) {
+        payload.courier_charge = tracking.courierCharge;
       }
 
       return Object.keys(payload).length
@@ -512,6 +546,7 @@ export async function syncShopifyOrders(input: SyncInput): Promise<SyncResult> {
 
         return {
           order_id: insertedOrderByShopifyId.get(order.id),
+          courier_charge: tracking.courierCharge,
           courier_name: tracking.courierName,
           tracking_id: tracking.trackingId,
           tracking_url: tracking.trackingUrl,
