@@ -301,6 +301,7 @@ export default async function HomePage() {
           currentDate={currentDate}
           deliveryDelayDays={appSettings.deliveryDelayDays}
           initialEndDate={initialEndDate}
+          initialDuplicateTrackingEntries={report.duplicateTrackingEntries}
           initialRows={report.rows}
           initialSummary={summary.summary}
           initialStartDate={initialStartDate}

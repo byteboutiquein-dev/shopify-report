@@ -97,6 +97,11 @@ export type OrdersReportSummary = {
   total: number;
 };
 
+export type DuplicateTrackingEntry = {
+  orderIds: string[];
+  trackingId: string;
+};
+
 export type OrdersReportSummaryInput = {
   currentDate: string;
   deliveryDelayDays: number;
@@ -374,6 +379,24 @@ function summarizeReportRows(rows: ReportRow[], input: OrdersReportSummaryInput)
   );
 }
 
+function findDuplicateTrackingEntries(rows: ReportRow[]): DuplicateTrackingEntry[] {
+  const orderIdsByTrackingId = new Map<string, string[]>();
+
+  for (const row of rows) {
+    const trackingId = row.trackingId.trim();
+
+    if (!trackingId) {
+      continue;
+    }
+
+    orderIdsByTrackingId.set(trackingId, [...(orderIdsByTrackingId.get(trackingId) ?? []), row.orderId]);
+  }
+
+  return [...orderIdsByTrackingId.entries()]
+    .filter(([, orderIds]) => orderIds.length > 1)
+    .map(([trackingId, orderIds]) => ({ orderIds, trackingId }));
+}
+
 async function getOrderRowsInDateRange(input: Pick<OrdersReportPageInput, "startDate" | "endDate">) {
   const supabase = createServerSupabaseClient();
   const pageSize = 1000;
@@ -434,12 +457,14 @@ export async function getOrdersReportRows(input: OrdersReportPageInput = {}) {
     );
 
     return {
+      duplicateTrackingEntries: findDuplicateTrackingEntries(sortedRows),
       rows: sortedRows.slice(from, to + 1),
       totalRows: sortedRows.length,
       error: null
     };
   } catch (error) {
     return {
+      duplicateTrackingEntries: [],
       rows: [],
       totalRows: 0,
       error: error instanceof Error ? error.message : "Could not load order report."

@@ -62,6 +62,7 @@ export async function GET(request: Request) {
       {
         message: report.error ?? summary.error,
         ok: false,
+        duplicateTrackingEntries: report.duplicateTrackingEntries,
         rows: [],
         summary: summary.summary,
         totalRows: 0
@@ -71,6 +72,7 @@ export async function GET(request: Request) {
   }
 
   return NextResponse.json({
+    duplicateTrackingEntries: report.duplicateTrackingEntries,
     ok: true,
     rows: report.rows,
     summary: summary.summary,

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Download, Filter, Info, RefreshCw, Search, X } from "lucide-react";
 
-import type { OrdersReportSummary, ReportRow } from "@/lib/orders/report";
+import type { DuplicateTrackingEntry, OrdersReportSummary, ReportRow } from "@/lib/orders/report";
 import { resolveTrackingUrl, supportedCourierOptions } from "@/lib/courier/tracking-links";
 import { reportColumns } from "@/lib/report/columns";
 import { statusOptions } from "@/lib/status-options";
@@ -12,6 +12,7 @@ type OrdersReportProps = {
   currentDate: string;
   deliveryDelayDays: number;
   initialEndDate: string;
+  initialDuplicateTrackingEntries: DuplicateTrackingEntry[];
   initialRows: ReportRow[];
   initialSummary: OrdersReportSummary;
   initialStartDate: string;
@@ -85,6 +86,7 @@ type TrackingStatusCheckResponse = {
 type ReportPageResponse = {
   ok: boolean;
   message?: string;
+  duplicateTrackingEntries?: DuplicateTrackingEntry[];
   rows?: ReportRow[];
   summary?: OrdersReportSummary;
   totalRows?: number;
@@ -369,6 +371,7 @@ export function OrdersReport({
   currentDate,
   deliveryDelayDays,
   initialEndDate,
+  initialDuplicateTrackingEntries,
   initialRows,
   initialSummary,
   initialStartDate,
@@ -376,6 +379,7 @@ export function OrdersReport({
 }: OrdersReportProps) {
   const [rows, setRows] = useState(initialRows);
   const [rangeSummary, setRangeSummary] = useState(initialSummary);
+  const [duplicateTrackingEntries, setDuplicateTrackingEntries] = useState(initialDuplicateTrackingEntries);
   const [totalRows, setTotalRows] = useState(initialTotalRows);
   const [dateRangePreset, setDateRangePreset] = useState<DateRangePreset>("last-7");
   const [filters, setFilters] = useState<Filters>({
@@ -393,6 +397,7 @@ export function OrdersReport({
   const [checkingRowIds, setCheckingRowIds] = useState<Set<string>>(() => new Set());
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ type: "success" | "warning" | "error"; message: string } | null>(null);
+  const [drawerNotice, setDrawerNotice] = useState<{ type: "success" | "warning" | "error"; message: string } | null>(null);
   const didLoadInitialPage = useRef(false);
 
   useEffect(() => {
@@ -442,6 +447,7 @@ export function OrdersReport({
         }
 
         setRows(data.rows);
+        setDuplicateTrackingEntries(data.duplicateTrackingEntries ?? []);
         setTotalRows(data.totalRows ?? data.rows.length);
         setRangeSummary(data.summary ?? {
           delayed: 0,
@@ -486,25 +492,6 @@ export function OrdersReport({
     reloadToken,
     sortKey
   ]);
-  const duplicateTrackingIds = useMemo(() => {
-    const counts = new Map<string, string[]>();
-
-    for (const row of rows) {
-      const trackingId = row.trackingId.trim();
-
-      if (!trackingId) {
-        continue;
-      }
-
-      counts.set(trackingId, [...(counts.get(trackingId) ?? []), row.orderId]);
-    }
-
-    return new Map([...counts.entries()].filter(([, orderIds]) => orderIds.length > 1));
-  }, [rows]);
-  const duplicateTrackingEntries = useMemo(
-    () => [...duplicateTrackingIds.entries()].map(([trackingId, orderIds]) => ({ orderIds, trackingId })),
-    [duplicateTrackingIds]
-  );
   const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
   const safePage = Math.min(page, totalPages);
   const pageRows = rows;
@@ -512,6 +499,7 @@ export function OrdersReport({
     () => (selectedOrderId ? rows.find((row) => row.id === selectedOrderId) ?? null : null),
     [rows, selectedOrderId]
   );
+
   const activeFilterChips = useMemo(() => {
     const chips: string[] = [];
 
@@ -626,6 +614,11 @@ export function OrdersReport({
     setNotice(null);
   }
 
+  function closeOrderDetails() {
+    setDrawerNotice(null);
+    setSelectedOrderId(null);
+  }
+
   function showDelayedOrders() {
     setFilters((current) => ({ ...emptyFilters, endDate: current.endDate, startDate: current.startDate, delayStatus: "delayed" }));
     setPage(1);
@@ -683,9 +676,20 @@ export function OrdersReport({
     setNotice({ type: "success", message: `Exported ${pageRows.length} rows from this page.` });
   }
 
+  function showRowNotice(
+    rowId: string,
+    value: { type: "success" | "warning" | "error"; message: string } | null
+  ) {
+    if (selectedOrderId === rowId) {
+      setDrawerNotice(value);
+    } else {
+      setNotice(value);
+    }
+  }
+
   async function saveOrderDraft(row: ReportRow, nextDraft: Draft, successMessage: string) {
     setRowSaving(row.id, true);
-    setNotice(null);
+    showRowNotice(row.id, null);
 
     try {
       if (nextDraft.courierCharge && !/^\d+(\.\d+)?$/.test(nextDraft.courierCharge)) {
@@ -711,12 +715,12 @@ export function OrdersReport({
       const savedRow = data.row;
       setRows((current) => current.map((row) => (row.id === savedRow.id ? savedRow : row)));
       clearInlineDraft(savedRow.id);
-      setNotice({
+      showRowNotice(row.id, {
         type: data.warning ? "warning" : "success",
         message: data.warning ?? successMessage
       });
     } catch (error) {
-      setNotice({
+      showRowNotice(row.id, {
         type: "error",
         message: error instanceof Error ? error.message : "Could not save order updates."
       });
@@ -764,7 +768,13 @@ export function OrdersReport({
   }
 
   async function checkDeliveryStatusesForRows(targetRows: ReportRow[], options: { bulk: boolean }) {
-    setNotice(null);
+    const targetRow = targetRows[0];
+    const singleRow = !options.bulk && targetRow ? targetRow : null;
+    if (singleRow) {
+      showRowNotice(singleRow.id, null);
+    } else {
+      setNotice(null);
+    }
 
     try {
       const response = await fetch("/api/tracking/check-status", {
@@ -799,27 +809,37 @@ export function OrdersReport({
         : "";
       const skippedText = data.skipped ? ` ${data.skipped} skipped.` : "";
       const targetText = options.bulk ? "all pending courier rows" : targetRows[0]?.orderId ?? "order";
-      setNotice({
+      const nextNotice = {
         type: data.failed ? "warning" : "success",
         message: `Checked ${targetText}. Checked ${data.checked ?? 0}. Updated ${data.updated ?? 0}.${failedText}${skippedText}${failureDetails}`
-      });
+      } as const;
+      if (singleRow) {
+        showRowNotice(singleRow.id, nextNotice);
+      } else {
+        setNotice(nextNotice);
+      }
     } catch (error) {
-      setNotice({
+      const nextNotice = {
         type: "error",
         message: error instanceof Error ? error.message : "Could not check delivery statuses."
-      });
+      } as const;
+      if (singleRow) {
+        showRowNotice(singleRow.id, nextNotice);
+      } else {
+        setNotice(nextNotice);
+      }
       throw error;
     }
   }
 
   async function checkSingleDeliveryStatus(row: ReportRow) {
     if (!row.trackingId.trim()) {
-      setNotice({ type: "error", message: `${row.orderId} does not have a tracking ID.` });
+      showRowNotice(row.id, { type: "error", message: `${row.orderId} does not have a tracking ID.` });
       return;
     }
 
     if (row.deliveryStatus === "Delivered" && row.courierDate) {
-      setNotice({ type: "success", message: `${row.orderId} is already marked delivered.` });
+      showRowNotice(row.id, { type: "success", message: `${row.orderId} is already marked delivered.` });
       return;
     }
 
@@ -947,7 +967,7 @@ export function OrdersReport({
       {duplicateTrackingEntries.length ? (
         <div className="notice warning">
           <strong>Duplicate tracking IDs found</strong>
-          <p>{duplicateTrackingEntries.length} tracking ID{duplicateTrackingEntries.length === 1 ? "" : "s"} appear on multiple orders in this loaded page.</p>
+          <p>{duplicateTrackingEntries.length} tracking ID{duplicateTrackingEntries.length === 1 ? "" : "s"} appear on multiple orders in the current filtered result.</p>
           <div className="duplicate-tracking-list">
             {duplicateTrackingEntries.slice(0, 5).map((entry) => (
               <button
@@ -1125,7 +1145,14 @@ export function OrdersReport({
                               {rowIsChecking ? "Checking" : "Check"}
                             </button>
                           ) : null}
-                          <button className="mini-button primary" type="button" onClick={() => setSelectedOrderId(row.id)}>
+                  <button
+                    className="mini-button primary"
+                    type="button"
+                    onClick={() => {
+                      setDrawerNotice(null);
+                      setSelectedOrderId(row.id);
+                    }}
+                  >
                             <Info aria-hidden="true" size={13} />
                             Details
                           </button>
@@ -1213,7 +1240,14 @@ export function OrdersReport({
                         {rowIsChecking ? "Checking" : "Check"}
                       </button>
                     ) : null}
-                    <button className="mini-button primary" type="button" onClick={() => setSelectedOrderId(row.id)}>
+                    <button
+                      className="mini-button primary"
+                      type="button"
+                      onClick={() => {
+                        setDrawerNotice(null);
+                        setSelectedOrderId(row.id);
+                      }}
+                    >
                       <Info aria-hidden="true" size={13} />
                       Details
                     </button>
@@ -1255,7 +1289,7 @@ export function OrdersReport({
             aria-label="Close order details"
             className="order-detail-scrim"
             type="button"
-            onClick={() => setSelectedOrderId(null)}
+            onClick={closeOrderDetails}
           />
           {(() => {
             const inlineDraft = inlineDraftFor(selectedRow);
@@ -1274,7 +1308,7 @@ export function OrdersReport({
                     <h2>{selectedRow.orderId}</h2>
                     <p>{selectedRow.name || "No customer name"} · {selectedRow.city || "No city"}</p>
                   </div>
-                  <button className="icon-button" type="button" aria-label="Close order details" onClick={() => setSelectedOrderId(null)}>
+                  <button className="icon-button" type="button" aria-label="Close order details" onClick={closeOrderDetails}>
                     <X aria-hidden="true" size={18} />
                   </button>
                 </div>
@@ -1286,6 +1320,17 @@ export function OrdersReport({
                     {txtStatusSummary(inlineDraft.confirmText, inlineDraft.trackingText, inlineDraft.reviewText)}
                   </span>
                 </div>
+
+                {drawerNotice ? (
+                  <div className={`notice ${drawerNotice.type}`}>
+                    <strong>
+                      {drawerNotice.type === "success" ? "Saved" : null}
+                      {drawerNotice.type === "warning" ? "Warning" : null}
+                      {drawerNotice.type === "error" ? "Update failed" : null}
+                    </strong>
+                    <p>{drawerNotice.message}</p>
+                  </div>
+                ) : null}
 
                 <section className={delayed ? "next-action-card urgent" : "next-action-card"}>
                   <div>
