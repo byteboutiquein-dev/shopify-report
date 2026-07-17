@@ -4,11 +4,16 @@ import { z } from "zod";
 import { getOrdersReportRows, getOrdersReportSummary } from "@/lib/orders/report";
 
 const reportQuerySchema = z.object({
+  courierName: z.string().optional().default(""),
   currentDate: z.string().optional().default(""),
   deliveryDelayDays: z.coerce.number().int().min(1).max(30).default(4),
+  deliveryStatus: z.string().optional().default(""),
+  delayStatus: z.string().optional().default(""),
   endDate: z.string().optional().default(""),
+  focusStatus: z.string().optional().default(""),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(250).default(100),
+  search: z.string().optional().default(""),
   sortKey: z
     .enum(["date-desc", "date-asc", "order-desc", "order-asc", "name-asc", "courier-asc", "delivery-asc"])
     .default("date-desc"),
@@ -31,9 +36,16 @@ export async function GET(request: Request) {
 
   const [report, summary] = await Promise.all([
     getOrdersReportRows({
+      courierName: parsed.data.courierName || undefined,
+      currentDate: parsed.data.currentDate || undefined,
+      deliveryDelayDays: parsed.data.deliveryDelayDays,
+      deliveryStatus: parsed.data.deliveryStatus || undefined,
+      delayStatus: parsed.data.delayStatus || undefined,
       endDate: parsed.data.endDate || undefined,
+      focusStatus: parsed.data.focusStatus || undefined,
       page: parsed.data.page,
       pageSize: parsed.data.pageSize,
+      search: parsed.data.search || undefined,
       sortKey: parsed.data.sortKey,
       startDate: parsed.data.startDate || undefined
     }),

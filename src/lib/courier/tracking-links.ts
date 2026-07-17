@@ -35,6 +35,10 @@ export function isIndiaPostTrackCourierSlug(slug: string | null | undefined) {
   return slug === "india-post-domestic" || slug === "india-post-international";
 }
 
+function isDtdcTrackCourierSlug(slug: string | null | undefined) {
+  return slug === "dtdc";
+}
+
 export function buildTrackCourierUrl(courierName: string | null | undefined, trackingId: string | null | undefined) {
   const slug = getTrackCourierSlug(courierName);
   const normalizedTrackingId = normalizeText(trackingId);
@@ -58,7 +62,7 @@ export function resolveTrackingUrl(
   const slug = getTrackCourierSlug(courierName);
   const generatedUrl = buildTrackCourierUrl(courierName, trackingId);
 
-  if (isIndiaPostTrackCourierSlug(slug)) {
+  if (isIndiaPostTrackCourierSlug(slug) || isDtdcTrackCourierSlug(slug)) {
     return generatedUrl ?? normalizeText(existingUrl);
   }
 

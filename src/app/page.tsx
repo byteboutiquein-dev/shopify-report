@@ -1,7 +1,7 @@
 import { OrdersReport } from "@/app/orders/orders-report";
 import { AppSettingsForm } from "@/app/settings/app-settings-form";
 import { SettingsDrawer } from "@/app/settings/settings-drawer";
-import { SyncControls } from "@/app/sync/sync-controls";
+import { HeaderSyncCards } from "@/app/sync/header-sync-cards";
 import { getAppSettings } from "@/lib/app-settings";
 import { getEnvStatus } from "@/lib/env";
 import { getOrdersReportRows, getOrdersReportSummary } from "@/lib/orders/report";
@@ -53,7 +53,14 @@ export default async function HomePage() {
   const initialEndDate = currentDate;
   const appSettings = await getAppSettings();
   const [report, summary, syncLogs, trackingLogs, baseline] = await Promise.all([
-    getOrdersReportRows({ endDate: initialEndDate, page: 1, pageSize: 100, startDate: initialStartDate }),
+    getOrdersReportRows({
+      currentDate,
+      deliveryDelayDays: appSettings.deliveryDelayDays,
+      endDate: initialEndDate,
+      page: 1,
+      pageSize: 100,
+      startDate: initialStartDate
+    }),
     getOrdersReportSummary({
       currentDate,
       deliveryDelayDays: appSettings.deliveryDelayDays,
@@ -75,18 +82,14 @@ export default async function HomePage() {
           <h1>Kuviyal Tracking</h1>
           <p className="page-copy">See urgent shipments first, sync Shopify tracking, and follow up on delayed orders.</p>
         </div>
-        <div className="header-status-grid" aria-label="Sync status">
-          <div className="header-status-card">
-            <span>Shopify orders</span>
-            <strong>{formatDateTime(latestOrderSync?.finished_at ?? latestOrderSync?.started_at ?? null)}</strong>
-            <small>{latestOrderSync ? `${latestOrderSync.sync_type} · ${latestOrderSync.status}` : "No sync yet"}</small>
-          </div>
-          <div className="header-status-card">
-            <span>Courier status</span>
-            <strong>{formatDateTime(latestTrackingSync?.finished_at ?? latestTrackingSync?.started_at ?? null)}</strong>
-            <small>{latestTrackingSync ? `${latestTrackingSync.check_source} · ${latestTrackingSync.status}` : "No check yet"}</small>
-          </div>
-        </div>
+        <HeaderSyncCards
+          baselineOrderName={baseline?.orderName ?? null}
+          isReady={envStatus.missing.length === 0 && envStatus.isValid}
+          latestOrderStatus={latestOrderSync ? `${latestOrderSync.sync_type} · ${latestOrderSync.status}` : "No sync yet"}
+          latestOrderTime={formatDateTime(latestOrderSync?.finished_at ?? latestOrderSync?.started_at ?? null)}
+          latestTrackingStatus={latestTrackingSync ? `${latestTrackingSync.check_source} · ${latestTrackingSync.status}` : "No check yet"}
+          latestTrackingTime={formatDateTime(latestTrackingSync?.finished_at ?? latestTrackingSync?.started_at ?? null)}
+        />
         <div className="header-actions">
           <SettingsDrawer isReady={envStatus.missing.length === 0 && envStatus.isValid}>
           {envStatus.missing.length ? (
@@ -109,17 +112,6 @@ export default async function HomePage() {
           <section className="settings-section">
             <div className="settings-section-heading">
               <span>02</span>
-              <div>
-                <h3>Manual Sync</h3>
-                <p>Run Shopify order sync when you need fresh order or tracking data immediately.</p>
-              </div>
-            </div>
-            <SyncControls baseline={baseline} />
-          </section>
-
-          <section className="settings-section">
-            <div className="settings-section-heading">
-              <span>03</span>
               <div>
                 <h3>History</h3>
                 <p>Review the latest order-sync and courier-check activity.</p>

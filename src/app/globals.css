@@ -131,6 +131,11 @@ textarea:disabled {
   grid-template-columns: repeat(2, minmax(150px, 1fr));
 }
 
+.header-status-wrap {
+  display: grid;
+  gap: 10px;
+}
+
 .header-status-card {
   background: rgba(255, 255, 255, 0.72);
   border: 1px solid rgba(216, 222, 213, 0.9);
@@ -139,6 +144,13 @@ textarea:disabled {
   gap: 6px;
   min-width: 170px;
   padding: 14px;
+}
+
+.header-status-card-top {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
 }
 
 .header-status-card span,
@@ -152,6 +164,81 @@ textarea:disabled {
 
 .header-status-card strong {
   font-size: 15px;
+}
+
+.header-info-button {
+  align-items: center;
+  background: #eef5ef;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--accent);
+  display: inline-flex;
+  height: 28px;
+  justify-content: center;
+  padding: 0;
+  width: 28px;
+}
+
+.header-info-button:hover,
+.header-info-button[aria-expanded="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #ffffff;
+}
+
+.header-status-action {
+  align-items: center;
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  color: #ffffff;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 900;
+  gap: 7px;
+  justify-content: center;
+  min-height: 34px;
+  margin-top: 6px;
+  padding: 0 12px;
+  text-transform: uppercase;
+}
+
+.header-sync-info {
+  background: #eef5ef;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 4px 0;
+  padding: 10px;
+}
+
+.header-sync-message {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.45;
+  padding: 10px 12px;
+}
+
+.header-sync-message.success {
+  background: #ecf7ef;
+  border-color: #b7d9bd;
+  color: #245236;
+}
+
+.header-sync-message.warning {
+  background: #fff6df;
+  border-color: #ead28c;
+  color: var(--warning);
+}
+
+.header-sync-message.error {
+  background: #fff0f0;
+  border-color: #efc0c0;
+  color: var(--danger);
 }
 
 .header-actions {

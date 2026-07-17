@@ -336,21 +336,8 @@ function getDateRangeForPreset(preset: Exclude<DateRangePreset, "custom">, curre
   };
 }
 
-function orderNumber(orderId: string) {
-  const numeric = Number(orderId.replace(/\D/g, ""));
-  return Number.isFinite(numeric) ? numeric : 0;
-}
-
-function compareText(left: string, right: string) {
-  return left.localeCompare(right, undefined, { sensitivity: "base", numeric: true });
-}
-
 function trackingUrlForRow(row: ReportRow) {
   return resolveTrackingUrl(row.courierName, row.trackingId, row.trackingUrl);
-}
-
-function courierFilterValueForRow(row: ReportRow) {
-  return row.courierName === "Other" ? "ST Courier" : row.courierName;
 }
 
 function formatDateTime(value: string) {
@@ -378,23 +365,6 @@ function stickyClassForColumn(column: string) {
   return "";
 }
 
-function sortRows(rows: ReportRow[], sortKey: SortKey, currentDate: string, deliveryDelayDays: number) {
-  return [...rows].sort((left, right) => {
-    const delayedSort =
-      Number(isDelayedOrder(right, currentDate, deliveryDelayDays)) -
-      Number(isDelayedOrder(left, currentDate, deliveryDelayDays));
-
-    if (delayedSort) return delayedSort;
-    if (sortKey === "date-desc") return compareText(right.date, left.date) || orderNumber(right.orderId) - orderNumber(left.orderId);
-    if (sortKey === "date-asc") return compareText(left.date, right.date) || orderNumber(left.orderId) - orderNumber(right.orderId);
-    if (sortKey === "order-desc") return orderNumber(right.orderId) - orderNumber(left.orderId);
-    if (sortKey === "order-asc") return orderNumber(left.orderId) - orderNumber(right.orderId);
-    if (sortKey === "name-asc") return compareText(left.name, right.name);
-    if (sortKey === "courier-asc") return compareText(left.courierName, right.courierName);
-    return compareText(deliveryStatusForRow(left), deliveryStatusForRow(right));
-  });
-}
-
 export function OrdersReport({
   currentDate,
   deliveryDelayDays,
@@ -416,14 +386,24 @@ export function OrdersReport({
   const [sortKey, setSortKey] = useState<SortKey>("date-desc");
   const [pageSize, setPageSize] = useState<(typeof pageSizeOptions)[number]>(100);
   const [page, setPage] = useState(1);
+  const [reloadToken, setReloadToken] = useState(0);
   const [loadingPage, setLoadingPage] = useState(false);
   const [inlineDrafts, setInlineDrafts] = useState<Record<string, InlineMessageDraft>>({});
   const [savingRowIds, setSavingRowIds] = useState<Set<string>>(() => new Set());
-  const [checkingStatuses, setCheckingStatuses] = useState(false);
   const [checkingRowIds, setCheckingRowIds] = useState<Set<string>>(() => new Set());
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ type: "success" | "warning" | "error"; message: string } | null>(null);
   const didLoadInitialPage = useRef(false);
+
+  useEffect(() => {
+    function reloadReport() {
+      setReloadToken((value) => value + 1);
+    }
+
+    window.addEventListener("orders-report-refresh", reloadReport);
+    return () => window.removeEventListener("orders-report-refresh", reloadReport);
+  }, []);
+
   useEffect(() => {
     if (!didLoadInitialPage.current) {
       didLoadInitialPage.current = true;
@@ -439,8 +419,13 @@ export function OrdersReport({
       sortKey
     });
 
+    if (filters.courierName) params.set("courierName", filters.courierName);
+    if (filters.deliveryStatus) params.set("deliveryStatus", filters.deliveryStatus);
+    if (filters.delayStatus) params.set("delayStatus", filters.delayStatus);
     if (filters.startDate) params.set("startDate", filters.startDate);
     if (filters.endDate) params.set("endDate", filters.endDate);
+    if (filters.focusStatus) params.set("focusStatus", filters.focusStatus);
+    if (filters.search.trim()) params.set("search", filters.search.trim());
 
     async function loadPage() {
       setLoadingPage(true);
@@ -486,7 +471,21 @@ export function OrdersReport({
     void loadPage();
 
     return () => controller.abort();
-  }, [currentDate, deliveryDelayDays, filters.endDate, filters.startDate, page, pageSize, sortKey]);
+  }, [
+    currentDate,
+    deliveryDelayDays,
+    filters.courierName,
+    filters.deliveryStatus,
+    filters.delayStatus,
+    filters.endDate,
+    filters.focusStatus,
+    filters.search,
+    filters.startDate,
+    page,
+    pageSize,
+    reloadToken,
+    sortKey
+  ]);
   const duplicateTrackingIds = useMemo(() => {
     const counts = new Map<string, string[]>();
 
@@ -506,70 +505,9 @@ export function OrdersReport({
     () => [...duplicateTrackingIds.entries()].map(([trackingId, orderIds]) => ({ orderIds, trackingId })),
     [duplicateTrackingIds]
   );
-  const dateFilteredRows = useMemo(() => {
-    return rows.filter((row) => {
-      const startMatches = !filters.startDate || row.date >= filters.startDate;
-      const endMatches = !filters.endDate || row.date <= filters.endDate;
-      return startMatches && endMatches;
-    });
-  }, [filters.endDate, filters.startDate, rows]);
-  const filteredRows = useMemo(() => {
-    const search = filters.search.trim().toLowerCase();
-    return dateFilteredRows.filter((row) => {
-      const searchMatches =
-        !search ||
-        [
-          row.date,
-          row.orderId,
-          row.name,
-          row.confirmText,
-          row.courierDate,
-          row.courierName,
-          row.city,
-          row.courierComments,
-          row.trackingId,
-          row.trackingCheckedAt,
-          row.trackingCheckError,
-          row.trackingText,
-          row.deliveryDate,
-          deliveryStatusForRow(row),
-          row.reviewText,
-          row.reviewComments
-        ]
-          .join(" ")
-          .toLowerCase()
-          .includes(search);
-      const courierMatches = !filters.courierName || courierFilterValueForRow(row) === filters.courierName;
-      const deliveryStatus = deliveryStatusForRow(row);
-      const deliveryMatches = !filters.deliveryStatus || deliveryStatus === filters.deliveryStatus;
-      const delayed = isDelayedOrder(row, currentDate, deliveryDelayDays);
-      const delayMatches =
-        !filters.delayStatus ||
-        (filters.delayStatus === "delayed" && delayed) ||
-        (filters.delayStatus === "not-delayed" && !delayed);
-      const focusMatches =
-        !filters.focusStatus ||
-        (filters.focusStatus === "review-pending" && !isMessageSent(row.reviewText)) ||
-        (filters.focusStatus === "moving" && (deliveryStatus === "In Transit" || deliveryStatus === "Shipped"));
-
-      return (
-        searchMatches &&
-        courierMatches &&
-        deliveryMatches &&
-        delayMatches &&
-        focusMatches
-      );
-    });
-  }, [currentDate, dateFilteredRows, deliveryDelayDays, filters]);
-
-  const sortedRows = useMemo(
-    () => sortRows(filteredRows, sortKey, currentDate, deliveryDelayDays),
-    [currentDate, deliveryDelayDays, filteredRows, sortKey]
-  );
-  const statusCheckRows = useMemo(() => rows.filter((row) => row.trackingId.trim() && row.deliveryStatus !== "Delivered"), [rows]);
   const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
   const safePage = Math.min(page, totalPages);
-  const pageRows = sortedRows;
+  const pageRows = rows;
   const selectedRow = useMemo(
     () => (selectedOrderId ? rows.find((row) => row.id === selectedOrderId) ?? null : null),
     [rows, selectedOrderId]
@@ -664,6 +602,19 @@ export function OrdersReport({
   }
 
   function clearFilters() {
+    setDateRangePreset("last-7");
+    setFilters({
+      ...emptyFilters,
+      ...getDateRangeForPreset("last-7", currentDate)
+    });
+    setSortKey("date-desc");
+    setPageSize(100);
+    setPage(1);
+    setSelectedOrderId(null);
+    setNotice(null);
+  }
+
+  function showAllInCurrentRange() {
     setFilters((current) => ({
       ...emptyFilters,
       endDate: current.endDate,
@@ -671,25 +622,27 @@ export function OrdersReport({
     }));
     setSortKey("date-desc");
     setPage(1);
+    setSelectedOrderId(null);
+    setNotice(null);
   }
 
   function showDelayedOrders() {
-    setFilters((current) => ({ ...current, delayStatus: "delayed", deliveryStatus: "", focusStatus: "" }));
+    setFilters((current) => ({ ...emptyFilters, endDate: current.endDate, startDate: current.startDate, delayStatus: "delayed" }));
     setPage(1);
   }
 
   function showDeliveryStatus(deliveryStatus: string) {
-    setFilters((current) => ({ ...current, delayStatus: "", deliveryStatus, focusStatus: "" }));
+    setFilters((current) => ({ ...emptyFilters, endDate: current.endDate, startDate: current.startDate, deliveryStatus }));
     setPage(1);
   }
 
   function showReviewPending() {
-    setFilters((current) => ({ ...current, delayStatus: "", deliveryStatus: "", focusStatus: "review-pending" }));
+    setFilters((current) => ({ ...emptyFilters, endDate: current.endDate, startDate: current.startDate, focusStatus: "review-pending" }));
     setPage(1);
   }
 
   function showMovingOrders() {
-    setFilters((current) => ({ ...current, delayStatus: "", deliveryStatus: "", focusStatus: "moving" }));
+    setFilters((current) => ({ ...emptyFilters, endDate: current.endDate, startDate: current.startDate, focusStatus: "moving" }));
     setPage(1);
   }
 
@@ -707,14 +660,14 @@ export function OrdersReport({
   }
 
   function exportFilteredRows() {
-    if (!sortedRows.length) {
+    if (!pageRows.length) {
       setNotice({ type: "error", message: "There are no visible rows to export." });
       return;
     }
 
     const csv = [
       reportColumns.map(csvEscape).join(","),
-      ...sortedRows.map((row) =>
+      ...pageRows.map((row) =>
         reportColumns
           .map((column) => csvEscape(csvValueForColumn(row, column, currentDate, deliveryDelayDays)))
           .join(",")
@@ -727,7 +680,7 @@ export function OrdersReport({
     link.download = buildExportFilename(filters);
     link.click();
     URL.revokeObjectURL(url);
-    setNotice({ type: "success", message: `Exported ${sortedRows.length} filtered rows.` });
+    setNotice({ type: "success", message: `Exported ${pageRows.length} rows from this page.` });
   }
 
   async function saveOrderDraft(row: ReportRow, nextDraft: Draft, successMessage: string) {
@@ -859,18 +812,6 @@ export function OrdersReport({
     }
   }
 
-  async function checkDeliveryStatuses() {
-    setCheckingStatuses(true);
-
-    try {
-      await checkDeliveryStatusesForRows(statusCheckRows, { bulk: true });
-    } catch {
-      // The shared checker already shows the specific error notice.
-    } finally {
-      setCheckingStatuses(false);
-    }
-  }
-
   async function checkSingleDeliveryStatus(row: ReportRow) {
     if (!row.trackingId.trim()) {
       setNotice({ type: "error", message: `${row.orderId} does not have a tracking ID.` });
@@ -921,18 +862,14 @@ export function OrdersReport({
               </label>
             </>
           ) : null}
-          <div className="filter-console-count">
-            <strong>{rangeSummary.total}</strong>
-            <span>orders in range</span>
-          </div>
         </div>
       </section>
 
       <section className="ops-summary" aria-label="Operational priorities">
-        <button className="ops-card" type="button" onClick={clearFilters}>
+        <button className="ops-card" type="button" onClick={showAllInCurrentRange}>
           <span>Total Orders</span>
           <strong>{rangeSummary.total}</strong>
-          <small>Selected range · clear filters</small>
+          <small>Selected range · clear table filters</small>
         </button>
         <button className={`ops-card urgent ${filters.delayStatus === "delayed" ? "active" : ""}`} type="button" onClick={showDelayedOrders}>
           <span>Delayed</span>
@@ -991,31 +928,11 @@ export function OrdersReport({
           <X aria-hidden="true" size={18} />
           Clear
         </button>
-        <button
-          className="button secondary"
-          disabled={checkingStatuses}
-          aria-busy={checkingStatuses}
-          type="button"
-          onClick={checkDeliveryStatuses}
-        >
-          <RefreshCw aria-hidden="true" className={checkingStatuses ? "spin" : ""} size={18} />
-          {checkingStatuses ? "Checking..." : "Sync courier status"}
-        </button>
         <button className="button" type="button" onClick={exportFilteredRows}>
           <Download aria-hidden="true" size={18} />
           Export
         </button>
       </div>
-
-      {checkingStatuses ? (
-        <div className="running-state">
-          <RefreshCw aria-hidden="true" className="spin" size={18} />
-          <div>
-            <strong>Courier status sync is running</strong>
-            <p>Checking all pending orders one by one. Keep this page open while rows update.</p>
-          </div>
-        </div>
-      ) : null}
 
       {loadingPage ? (
         <div className="running-state">
@@ -1054,8 +971,8 @@ export function OrdersReport({
             <h2>Refine the report table</h2>
           </div>
           <div className="filter-console-count">
-            <strong>{sortedRows.length}</strong>
-            <span>visible on this page</span>
+            <strong>{totalRows}</strong>
+            <span>matching filters</span>
           </div>
         </div>
 
@@ -1133,7 +1050,7 @@ export function OrdersReport({
       <section className="panel">
         <div className="panel-header">
           <h2>Orders Report</h2>
-          <span className="badge ready">{sortedRows.length} shown · {totalRows} total</span>
+          <span className="badge ready">{pageRows.length} shown · {totalRows} matching</span>
         </div>
         <div className="table-wrap">
           <table className="orders-table">
@@ -1198,7 +1115,7 @@ export function OrdersReport({
                             <button
                               aria-label={`Check delivery status for ${row.orderId}`}
                               className="mini-button"
-                              disabled={rowIsChecking || checkingStatuses}
+                              disabled={rowIsChecking}
                               type="button"
                               onClick={() => {
                                 void checkSingleDeliveryStatus(row);
@@ -1286,7 +1203,7 @@ export function OrdersReport({
                       <button
                         aria-label={`Check delivery status for ${row.orderId}`}
                         className="mini-button"
-                        disabled={rowIsChecking || checkingStatuses}
+                        disabled={rowIsChecking}
                         type="button"
                         onClick={() => {
                           void checkSingleDeliveryStatus(row);
@@ -1319,7 +1236,7 @@ export function OrdersReport({
       <div className="filter-summary">
         <Filter aria-hidden="true" size={16} />
         <span>
-          Showing {pageRows.length} visible row{pageRows.length === 1 ? "" : "s"} on page {safePage}. {totalRows} orders in range.
+          Showing {pageRows.length} row{pageRows.length === 1 ? "" : "s"} on page {safePage}. {totalRows} order{totalRows === 1 ? "" : "s"} match the current filters.
         </span>
         <div className="pagination">
           <button className="icon-button" type="button" disabled={loadingPage || safePage <= 1} onClick={() => setPage(Math.max(1, safePage - 1))} aria-label="Previous page">
@@ -1379,7 +1296,7 @@ export function OrdersReport({
                   {selectedRow.trackingId && deliveryStatus !== "Delivered" ? (
                     <button
                       className="button"
-                      disabled={rowIsChecking || checkingStatuses}
+                      disabled={rowIsChecking}
                       type="button"
                       onClick={() => {
                         void checkSingleDeliveryStatus(selectedRow);
@@ -1452,7 +1369,7 @@ export function OrdersReport({
                     {selectedRow.trackingId && deliveryStatus !== "Delivered" ? (
                       <button
                         className="button"
-                        disabled={rowIsChecking || checkingStatuses}
+                        disabled={rowIsChecking}
                         type="button"
                         onClick={() => {
                           void checkSingleDeliveryStatus(selectedRow);
