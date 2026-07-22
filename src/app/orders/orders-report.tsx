@@ -546,7 +546,15 @@ export function OrdersReport({
 
   function updateCustomDate(key: "startDate" | "endDate", value: string) {
     setDateRangePreset("custom");
-    updateFilter(key, value);
+    setFilters((current) => ({
+      ...emptyFilters,
+      endDate: current.endDate,
+      startDate: current.startDate,
+      [key]: value
+    }));
+    setPage(1);
+    setSelectedOrderId(null);
+    setNotice(null);
   }
 
   function inlineDraftFor(row: ReportRow) {
@@ -644,36 +652,66 @@ export function OrdersReport({
   }
 
   function showDelayedOrders() {
-    setFilters((current) => ({ ...emptyFilters, endDate: current.endDate, startDate: current.startDate, delayStatus: "delayed" }));
+    setFilters((current) => ({
+      ...emptyFilters,
+      endDate: current.endDate,
+      startDate: current.startDate,
+      delayStatus: current.delayStatus === "delayed" ? "" : "delayed"
+    }));
     setPage(1);
+    setSelectedOrderId(null);
+    setNotice(null);
   }
 
   function showDeliveryStatus(deliveryStatus: string) {
-    setFilters((current) => ({ ...emptyFilters, endDate: current.endDate, startDate: current.startDate, deliveryStatus }));
+    setFilters((current) => ({
+      ...emptyFilters,
+      endDate: current.endDate,
+      startDate: current.startDate,
+      deliveryStatus: current.deliveryStatus === deliveryStatus ? "" : deliveryStatus
+    }));
     setPage(1);
+    setSelectedOrderId(null);
+    setNotice(null);
   }
 
   function showReviewPending() {
-    setFilters((current) => ({ ...emptyFilters, endDate: current.endDate, startDate: current.startDate, focusStatus: "review-pending" }));
+    setFilters((current) => ({
+      ...emptyFilters,
+      endDate: current.endDate,
+      startDate: current.startDate,
+      focusStatus: current.focusStatus === "review-pending" ? "" : "review-pending"
+    }));
     setPage(1);
+    setSelectedOrderId(null);
+    setNotice(null);
   }
 
   function showMovingOrders() {
-    setFilters((current) => ({ ...emptyFilters, endDate: current.endDate, startDate: current.startDate, focusStatus: "moving" }));
+    setFilters((current) => ({
+      ...emptyFilters,
+      endDate: current.endDate,
+      startDate: current.startDate,
+      focusStatus: current.focusStatus === "moving" ? "" : "moving"
+    }));
     setPage(1);
+    setSelectedOrderId(null);
+    setNotice(null);
   }
 
   function setDateRange(range: DateRangePreset) {
     setDateRangePreset(range);
 
-    if (range !== "custom") {
-      setFilters((current) => ({
-        ...current,
-        ...getDateRangeForPreset(range, currentDate)
-      }));
-    }
+    setFilters((current) => ({
+      ...emptyFilters,
+      ...(range === "custom"
+        ? { endDate: current.endDate, startDate: current.startDate }
+        : getDateRangeForPreset(range, currentDate))
+    }));
 
     setPage(1);
+    setSelectedOrderId(null);
+    setNotice(null);
   }
 
   function exportFilteredRows() {
