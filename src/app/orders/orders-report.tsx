@@ -360,6 +360,37 @@ function formatDateTime(value: string) {
   }).format(date);
 }
 
+function formatOrderDate(value: string) {
+  if (!value) {
+    return "";
+  }
+
+  const date = new Date(`${value}T00:00:00+05:30`);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("en-IN", {
+    dateStyle: "medium",
+    timeZone: "Asia/Kolkata"
+  }).format(date);
+}
+
+function trackingSourceLabel(value: string) {
+  if (value === "Scheduled") return "Auto check";
+  if (value === "Manual") return "Manual check";
+  return value || "Manual check";
+}
+
+function shippedDateLabel(value: string) {
+  return value ? `Shipped ${formatOrderDate(value)}` : "Shipment date missing";
+}
+
+function lastCheckedLabel(value: string, source: string) {
+  return value ? `Last checked ${formatDateTime(value)} · ${trackingSourceLabel(source)}` : "Last checked never";
+}
+
 function stickyClassForColumn(column: string) {
   if (column === "DATE") return "sticky-col sticky-col-1";
   if (column === "ORDER ID") return "sticky-col sticky-col-2";
@@ -1091,7 +1122,7 @@ export function OrdersReport({
                       <td>
                         <div className="stacked-cell">
                           <strong>{row.courierName || "No courier"}</strong>
-                          <span>{row.courierDate || "No courier date"}</span>
+                          <span>{row.courierName ? shippedDateLabel(row.courierDate) : "Not shipped yet"}</span>
                         </div>
                       </td>
                       <td>
@@ -1103,11 +1134,7 @@ export function OrdersReport({
                           ) : (
                             <strong>{row.trackingId || "-"}</strong>
                           )}
-                          <span>
-                            {row.trackingCheckedAt
-                              ? `${formatDateTime(row.trackingCheckedAt)} · ${row.trackingCheckSource || "Manual"}`
-                              : "Never checked"}
-                          </span>
+                          <span>{lastCheckedLabel(row.trackingCheckedAt, row.trackingCheckSource)}</span>
                         </div>
                       </td>
                       <td>
@@ -1196,8 +1223,8 @@ export function OrdersReport({
                       <strong>{row.courierName || "No courier"}</strong>
                     </div>
                     <div>
-                      <span>Courier date</span>
-                      <strong>{row.courierDate || "-"}</strong>
+                      <span>Shipped</span>
+                      <strong>{row.courierName ? formatOrderDate(row.courierDate) || "Date missing" : "Not shipped yet"}</strong>
                     </div>
                     <div>
                       <span>Tracking</span>
@@ -1205,11 +1232,7 @@ export function OrdersReport({
                     </div>
                     <div>
                       <span>Last checked</span>
-                      <strong>
-                        {row.trackingCheckedAt
-                          ? `${formatDateTime(row.trackingCheckedAt)} · ${row.trackingCheckSource || "Manual"}`
-                          : "Never checked"}
-                      </strong>
+                      <strong>{lastCheckedLabel(row.trackingCheckedAt, row.trackingCheckSource)}</strong>
                     </div>
                   </div>
                   {delayed ? <span className="status-pill delayed">Delayed</span> : null}
@@ -1354,16 +1377,16 @@ export function OrdersReport({
                       <strong>{selectedRow.courierName || "-"}</strong>
                     </div>
                     <div>
-                      <span>Courier date</span>
-                      <strong>{selectedRow.courierDate || "-"}</strong>
+                      <span>Shipped</span>
+                      <strong>{selectedRow.courierName ? formatOrderDate(selectedRow.courierDate) || "Date missing" : "Not shipped yet"}</strong>
                     </div>
                     <div>
                       <span>Delivery date</span>
-                      <strong>{selectedRow.deliveryDate || "-"}</strong>
+                      <strong>{formatOrderDate(selectedRow.deliveryDate) || "-"}</strong>
                     </div>
                     <div>
                       <span>Last checked</span>
-                      <strong>{formatDateTime(selectedRow.trackingCheckedAt)}</strong>
+                      <strong>{lastCheckedLabel(selectedRow.trackingCheckedAt, selectedRow.trackingCheckSource)}</strong>
                     </div>
                   </div>
 
@@ -1394,7 +1417,7 @@ export function OrdersReport({
                     </div>
                     <div>
                       <span>Check type</span>
-                      <strong>{selectedRow.trackingCheckSource || "-"}</strong>
+                      <strong>{trackingSourceLabel(selectedRow.trackingCheckSource)}</strong>
                     </div>
                   </div>
                   {selectedRow.trackingCheckError ? <p className="error-text">{selectedRow.trackingCheckError}</p> : null}
