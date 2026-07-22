@@ -1,5 +1,7 @@
 const TRACK_COURIER_BASE_URL = "https://trackcourier.io/track-and-trace";
 const MYSPEEDPOST_BASE_URL = "https://myspeedpost.com/s";
+const TRACK91_BASE_URL = "https://track91.com";
+const ST_COURIER_TRACK_URL = "https://stcourier.com/track/shipment";
 
 export const supportedCourierOptions = [
   { label: "DTDC", value: "DTDC India" },
@@ -35,8 +37,12 @@ export function isIndiaPostTrackCourierSlug(slug: string | null | undefined) {
   return slug === "india-post-domestic" || slug === "india-post-international";
 }
 
-function isDtdcTrackCourierSlug(slug: string | null | undefined) {
+export function isDtdcTrackCourierSlug(slug: string | null | undefined) {
   return slug === "dtdc";
+}
+
+function buildTrack91DtdcUrl(trackingId: string) {
+  return `${TRACK91_BASE_URL}/dtdc/track?n=${encodeURIComponent(trackingId)}`;
 }
 
 export function buildTrackCourierUrl(courierName: string | null | undefined, trackingId: string | null | undefined) {
@@ -51,6 +57,14 @@ export function buildTrackCourierUrl(courierName: string | null | undefined, tra
     return `${MYSPEEDPOST_BASE_URL}/${encodeURIComponent(normalizedTrackingId)}`;
   }
 
+  if (isDtdcTrackCourierSlug(slug)) {
+    return buildTrack91DtdcUrl(normalizedTrackingId);
+  }
+
+  if (slug === "st-courier") {
+    return ST_COURIER_TRACK_URL;
+  }
+
   return `${TRACK_COURIER_BASE_URL}/${slug}/${encodeURIComponent(normalizedTrackingId)}`;
 }
 
@@ -62,7 +76,11 @@ export function resolveTrackingUrl(
   const slug = getTrackCourierSlug(courierName);
   const generatedUrl = buildTrackCourierUrl(courierName, trackingId);
 
-  if (isIndiaPostTrackCourierSlug(slug) || isDtdcTrackCourierSlug(slug)) {
+  if (
+    isIndiaPostTrackCourierSlug(slug) ||
+    isDtdcTrackCourierSlug(slug) ||
+    slug === "st-courier"
+  ) {
     return generatedUrl ?? normalizeText(existingUrl);
   }
 

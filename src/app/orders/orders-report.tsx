@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Download, Filter, Info, RefreshCw, Search, X } from "lucide-react";
 
 import type { DuplicateTrackingEntry, OrdersReportSummary, ReportRow } from "@/lib/orders/report";
@@ -398,8 +398,6 @@ export function OrdersReport({
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ type: "success" | "warning" | "error"; message: string } | null>(null);
   const [drawerNotice, setDrawerNotice] = useState<{ type: "success" | "warning" | "error"; message: string } | null>(null);
-  const didLoadInitialPage = useRef(false);
-
   useEffect(() => {
     function reloadReport() {
       setReloadToken((value) => value + 1);
@@ -410,11 +408,6 @@ export function OrdersReport({
   }, []);
 
   useEffect(() => {
-    if (!didLoadInitialPage.current) {
-      didLoadInitialPage.current = true;
-      return;
-    }
-
     const controller = new AbortController();
     const params = new URLSearchParams({
       currentDate,

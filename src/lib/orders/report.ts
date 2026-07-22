@@ -283,13 +283,8 @@ function courierFilterValueForReportRow(row: ReportRow) {
   return row.courierName === "Other" ? "ST Courier" : row.courierName;
 }
 
-function sortReportRows(rows: ReportRow[], sortKey: ReportSortKey, currentDate: string, deliveryDelayDays: number) {
+function sortReportRows(rows: ReportRow[], sortKey: ReportSortKey) {
   return [...rows].sort((left, right) => {
-    const delayedSort =
-      Number(isDelayedReportRow(right, currentDate, deliveryDelayDays)) -
-      Number(isDelayedReportRow(left, currentDate, deliveryDelayDays));
-
-    if (delayedSort) return delayedSort;
     if (sortKey === "date-desc") return compareText(right.date, left.date) || orderNumber(right.orderId) - orderNumber(left.orderId);
     if (sortKey === "date-asc") return compareText(left.date, right.date) || orderNumber(left.orderId) - orderNumber(right.orderId);
     if (sortKey === "order-desc") return orderNumber(right.orderId) - orderNumber(left.orderId);
@@ -449,12 +444,7 @@ export async function getOrdersReportRows(input: OrdersReportPageInput = {}) {
     ]);
     const mappedRows = mapReportRows(orders, reviewCommentsByOrder, courierCommentsByOrder);
     const filteredRows = filterReportRows(mappedRows, input);
-    const sortedRows = sortReportRows(
-      filteredRows,
-      sortKey,
-      input.currentDate ?? new Date().toISOString().slice(0, 10),
-      input.deliveryDelayDays ?? 4
-    );
+    const sortedRows = sortReportRows(filteredRows, sortKey);
 
     return {
       duplicateTrackingEntries: findDuplicateTrackingEntries(sortedRows),
