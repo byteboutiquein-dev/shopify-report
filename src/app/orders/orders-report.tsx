@@ -382,7 +382,7 @@ function courierScanLabel(row: ReportRow) {
     return "Not shipped yet";
   }
 
-  return row.courierDate ? `Courier scan ${formatOrderDate(row.courierDate)}` : "Waiting for courier scan";
+  return row.courierDate ? "Shipped" : "Waiting for courier scan";
 }
 
 function trackingCheckLabel(row: ReportRow) {
