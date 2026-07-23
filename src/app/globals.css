@@ -2001,41 +2001,6 @@ th.sticky-col {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.tracking-preview-grid.compact {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
-.tracking-preview-notes {
-  display: grid;
-  gap: 12px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.tracking-preview-notes > div {
-  background: rgba(255, 255, 255, 0.82);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  display: grid;
-  gap: 6px;
-  padding: 13px;
-}
-
-.tracking-preview-notes span {
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 900;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.tracking-preview-notes p {
-  color: var(--ink);
-  font-weight: 750;
-  line-height: 1.45;
-  margin: 0;
-  white-space: pre-wrap;
-}
-
 .tracking-preview-error {
   background: #fff8ed;
   border: 1px solid rgba(180, 107, 22, 0.2);
@@ -2438,9 +2403,7 @@ th.sticky-col {
   }
 
   .tracking-live-status,
-  .tracking-preview-grid,
-  .tracking-preview-grid.compact,
-  .tracking-preview-notes {
+  .tracking-preview-grid {
     grid-template-columns: 1fr;
   }
 }

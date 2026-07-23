@@ -377,19 +377,6 @@ function formatOrderDate(value: string) {
   }).format(date);
 }
 
-function formatRupees(value: number | null) {
-  if (value === null) {
-    return "-";
-  }
-
-  return new Intl.NumberFormat("en-IN", {
-    currency: "INR",
-    maximumFractionDigits: 2,
-    minimumFractionDigits: 0,
-    style: "currency"
-  }).format(value);
-}
-
 function courierScanLabel(row: ReportRow) {
   if (deliveryStatusForRow(row) === "Delivered") {
     return row.deliveryDate ? `Delivered ${formatOrderDate(row.deliveryDate)}` : "Delivered";
@@ -1637,13 +1624,13 @@ export function OrdersReport({
             const rowIsChecking = checkingRowIds.has(trackingPreviewRow.id);
 
             return (
-              <section className="tracking-preview-panel" aria-label={`Tracking preview for ${trackingPreviewRow.orderId}`}>
+              <section className="tracking-preview-panel" aria-label={`Tracking preview for ${trackingPreviewRow.trackingId || "shipment"}`}>
                 <div className="tracking-preview-header">
                   <div>
                     <p className="eyebrow">Tracking Preview</p>
-                    <h2>{trackingPreviewRow.orderId}</h2>
+                    <h2>{trackingPreviewRow.trackingId || "No tracking ID"}</h2>
                     <p>
-                      {trackingPreviewRow.courierName || "No courier"} · {trackingPreviewRow.trackingId || "No tracking ID"}
+                      {trackingPreviewRow.courierName || "No courier"}
                     </p>
                   </div>
                   <div className="tracking-preview-actions">
@@ -1700,80 +1687,6 @@ export function OrdersReport({
                       <div>
                         <span>Delivery status</span>
                         <strong>{deliveryStatus}</strong>
-                      </div>
-                      <div>
-                        <span>Courier charge</span>
-                        <strong>{formatRupees(trackingPreviewRow.courierCharge)}</strong>
-                      </div>
-                      <div>
-                        <span>Check source</span>
-                        <strong>{trackingPreviewRow.trackingCheckSource || "-"}</strong>
-                      </div>
-                    </div>
-                  </section>
-
-                  <section className="tracking-preview-section">
-                    <h3>Order</h3>
-                    <div className="tracking-preview-grid">
-                      <div>
-                        <span>Order date</span>
-                        <strong>{formatOrderDate(trackingPreviewRow.date) || trackingPreviewRow.date}</strong>
-                      </div>
-                      <div>
-                        <span>Customer</span>
-                        <strong>{trackingPreviewRow.name || "-"}</strong>
-                      </div>
-                      <div>
-                        <span>City</span>
-                        <strong>{trackingPreviewRow.city || "-"}</strong>
-                      </div>
-                      <div>
-                        <span>State</span>
-                        <strong>{trackingPreviewRow.state || "-"}</strong>
-                      </div>
-                      <div>
-                        <span>Order value</span>
-                        <strong>{formatRupees(trackingPreviewRow.price)}</strong>
-                      </div>
-                      <div>
-                        <span>Next action</span>
-                        <strong>{nextActionForRow(trackingPreviewRow, currentDate, deliveryDelayDays).title}</strong>
-                      </div>
-                    </div>
-                  </section>
-
-                  <section className="tracking-preview-section">
-                    <h3>Communication</h3>
-                    <div className="tracking-preview-grid compact">
-                      <div>
-                        <span>Confirm TXT</span>
-                        <strong>{trackingPreviewRow.confirmText}</strong>
-                      </div>
-                      <div>
-                        <span>Tracking TXT</span>
-                        <strong>{trackingPreviewRow.trackingText}</strong>
-                      </div>
-                      <div>
-                        <span>Review TXT</span>
-                        <strong>{trackingPreviewRow.reviewText}</strong>
-                      </div>
-                      <div>
-                        <span>TXT summary</span>
-                        <strong>{txtStatusSummary(trackingPreviewRow.confirmText, trackingPreviewRow.trackingText, trackingPreviewRow.reviewText)}</strong>
-                      </div>
-                    </div>
-                  </section>
-
-                  <section className="tracking-preview-section">
-                    <h3>Notes</h3>
-                    <div className="tracking-preview-notes">
-                      <div>
-                        <span>Courier comments</span>
-                        <p>{trackingPreviewRow.courierComments || "No courier comments added."}</p>
-                      </div>
-                      <div>
-                        <span>Review comments</span>
-                        <p>{trackingPreviewRow.reviewComments || "No review comments added."}</p>
                       </div>
                     </div>
                   </section>
