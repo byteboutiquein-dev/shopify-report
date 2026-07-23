@@ -1943,6 +1943,49 @@ th.sticky-col {
   width: 100%;
 }
 
+.tracking-preview-blocked {
+  align-content: center;
+  align-items: center;
+  background:
+    radial-gradient(circle at top left, rgba(47, 111, 94, 0.12), transparent 20rem),
+    linear-gradient(135deg, #ffffff, #f3f7ef);
+  border: 1px dashed var(--border-strong);
+  border-radius: 18px;
+  display: grid;
+  gap: 16px;
+  justify-items: center;
+  min-height: 360px;
+  padding: 32px;
+  text-align: center;
+}
+
+.tracking-preview-blocked-icon {
+  align-items: center;
+  background: #e1f2ea;
+  border: 1px solid rgba(47, 111, 94, 0.16);
+  border-radius: 999px;
+  color: var(--accent);
+  display: inline-flex;
+  height: 76px;
+  justify-content: center;
+  width: 76px;
+}
+
+.tracking-preview-blocked strong {
+  display: block;
+  font-size: 24px;
+  letter-spacing: -0.03em;
+  margin-bottom: 8px;
+}
+
+.tracking-preview-blocked p {
+  color: var(--muted);
+  font-weight: 800;
+  line-height: 1.5;
+  margin: 0 auto;
+  max-width: 560px;
+}
+
 .tracking-preview-note {
   color: var(--muted);
   font-size: 12px;

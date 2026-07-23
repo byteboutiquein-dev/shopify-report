@@ -342,6 +342,15 @@ function trackingUrlForRow(row: ReportRow) {
   return resolveTrackingUrl(row.courierName, row.trackingId, row.trackingUrl);
 }
 
+function canEmbedTrackingUrl(value: string) {
+  try {
+    const hostname = new URL(value).hostname.replace(/^www\./, "");
+    return !["track91.com", "trackcourier.co", "trackcourier.io", "stcourier.com", "tpcindia.com"].includes(hostname);
+  } catch {
+    return false;
+  }
+}
+
 function formatDateTime(value: string) {
   if (!value) {
     return "Never checked";
@@ -1619,6 +1628,7 @@ export function OrdersReport({
           />
           {(() => {
             const previewUrl = trackingUrlForRow(trackingPreviewRow);
+            const canEmbedPreview = Boolean(previewUrl && canEmbedTrackingUrl(previewUrl));
 
             return (
               <section className="tracking-preview-panel" aria-label={`Tracking preview for ${trackingPreviewRow.orderId}`}>
@@ -1643,7 +1653,7 @@ export function OrdersReport({
                   </div>
                 </div>
 
-                {previewUrl ? (
+                {previewUrl && canEmbedPreview ? (
                   <>
                     <iframe
                       className="tracking-preview-frame"
@@ -1656,6 +1666,22 @@ export function OrdersReport({
                       If the courier site blocks preview, use Open to view it in a new tab.
                     </p>
                   </>
+                ) : previewUrl ? (
+                  <div className="tracking-preview-blocked">
+                    <div className="tracking-preview-blocked-icon">
+                      <ExternalLink aria-hidden="true" size={34} />
+                    </div>
+                    <div>
+                      <strong>Courier site blocks in-app preview</strong>
+                      <p>
+                        {trackingPreviewRow.courierName || "This courier"} does not allow its tracking page inside another app. Open it in a new tab to view live delivery details.
+                      </p>
+                    </div>
+                    <a className="button" href={previewUrl} rel="noreferrer" target="_blank">
+                      <ExternalLink aria-hidden="true" size={18} />
+                      Open Tracking Page
+                    </a>
+                  </div>
                 ) : (
                   <div className="empty-state">
                     <strong>No tracking page available</strong>
