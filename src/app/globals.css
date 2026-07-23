@@ -1956,6 +1956,17 @@ th.sticky-col {
   text-transform: uppercase;
 }
 
+.tracking-preview-loading {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  color: var(--accent);
+  display: flex;
+  gap: 10px;
+  padding: 13px;
+}
+
 .tracking-live-status {
   align-items: stretch;
   display: grid;
@@ -2016,6 +2027,62 @@ th.sticky-col {
 
 .tracking-preview-error p {
   margin: 0;
+}
+
+.tracking-timeline {
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  display: grid;
+  padding: 8px 12px;
+}
+
+.tracking-timeline-event {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 18px minmax(0, 1fr);
+  padding: 12px 0;
+  position: relative;
+}
+
+.tracking-timeline-event:not(:last-child)::before {
+  background: #f4c27d;
+  bottom: -8px;
+  content: "";
+  left: 8px;
+  position: absolute;
+  top: 28px;
+  width: 2px;
+}
+
+.tracking-timeline-dot {
+  background: #ff8a00;
+  border: 4px solid #ffe4bc;
+  border-radius: 999px;
+  height: 18px;
+  margin-top: 4px;
+  width: 18px;
+  z-index: 1;
+}
+
+.tracking-timeline-event span {
+  color: var(--muted);
+  display: block;
+  font-size: 12px;
+  font-weight: 900;
+  margin-bottom: 3px;
+}
+
+.tracking-timeline-event strong {
+  display: block;
+  font-size: 16px;
+}
+
+.tracking-timeline-event p {
+  color: var(--muted);
+  font-weight: 800;
+  line-height: 1.4;
+  margin: 3px 0 0;
 }
 
 .tracking-preview-footer {

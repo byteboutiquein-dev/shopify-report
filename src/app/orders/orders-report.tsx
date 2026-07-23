@@ -92,6 +92,42 @@ type ReportPageResponse = {
   totalRows?: number;
 };
 
+type TrackingPreviewDetails = {
+  bookedAt: string | null;
+  deliveredAt: string | null;
+  destination: string | null;
+  estimatedDeliveryDate: string | null;
+  events: Array<{
+    event: string;
+    eventCode: string | null;
+    location: string | null;
+    nextLocation: string | null;
+    remarks: string | null;
+    trackedAt: string | null;
+  }>;
+  lastEventAt: string | null;
+  lastUpdatedAt: string | null;
+  origin: string | null;
+  pieces: number | null;
+  rawStatus: string;
+  referenceNumber: string | null;
+  scheduledDeliveryDate: string | null;
+  weight: string | null;
+};
+
+type TrackingPreviewResponse = {
+  details?: TrackingPreviewDetails | null;
+  message?: string;
+  ok: boolean;
+  status?: {
+    courierDate: string | null;
+    deliveryDate: string | null;
+    deliveryStatus: string;
+    rawStatus: string;
+    trackingStatus: string;
+  };
+};
+
 const sortOptions: Array<{ value: SortKey; label: string }> = [
   { value: "date-desc", label: "Newest first" },
   { value: "date-asc", label: "Oldest first" },
@@ -377,6 +413,18 @@ function formatOrderDate(value: string) {
   }).format(date);
 }
 
+function formatTrackingDateTime(value: string | null | undefined) {
+  if (!value) {
+    return "-";
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return formatOrderDate(value);
+  }
+
+  return formatDateTime(value);
+}
+
 function courierScanLabel(row: ReportRow) {
   if (deliveryStatusForRow(row) === "Delivered") {
     return row.deliveryDate ? `Delivered ${formatOrderDate(row.deliveryDate)}` : "Delivered";
@@ -446,6 +494,10 @@ export function OrdersReport({
   const [checkingRowIds, setCheckingRowIds] = useState<Set<string>>(() => new Set());
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [trackingPreviewOrderId, setTrackingPreviewOrderId] = useState<string | null>(null);
+  const [trackingPreviewData, setTrackingPreviewData] = useState<TrackingPreviewResponse | null>(null);
+  const [trackingPreviewError, setTrackingPreviewError] = useState<string | null>(null);
+  const [trackingPreviewLoading, setTrackingPreviewLoading] = useState(false);
+  const [trackingPreviewReloadToken, setTrackingPreviewReloadToken] = useState(0);
   const [notice, setNotice] = useState<{ type: "success" | "warning" | "error"; message: string } | null>(null);
   const [drawerNotice, setDrawerNotice] = useState<{ type: "success" | "warning" | "error"; message: string } | null>(null);
   useEffect(() => {
@@ -547,6 +599,53 @@ export function OrdersReport({
     () => (trackingPreviewOrderId ? rows.find((row) => row.id === trackingPreviewOrderId) ?? null : null),
     [rows, trackingPreviewOrderId]
   );
+
+  useEffect(() => {
+    if (!trackingPreviewRow?.trackingId) {
+      return;
+    }
+
+    const controller = new AbortController();
+
+    async function loadTrackingPreview() {
+      setTrackingPreviewLoading(true);
+      setTrackingPreviewError(null);
+
+      try {
+        const response = await fetch("/api/tracking/preview", {
+          body: JSON.stringify({ orderId: trackingPreviewRow?.id }),
+          cache: "no-store",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          method: "POST",
+          signal: controller.signal
+        });
+        const data = (await response.json()) as TrackingPreviewResponse;
+
+        if (!response.ok || !data.ok) {
+          throw new Error(data.message ?? "Could not load tracking page details.");
+        }
+
+        setTrackingPreviewData(data);
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
+
+        setTrackingPreviewData(null);
+        setTrackingPreviewError(error instanceof Error ? error.message : "Could not load tracking page details.");
+      } finally {
+        if (!controller.signal.aborted) {
+          setTrackingPreviewLoading(false);
+        }
+      }
+    }
+
+    void loadTrackingPreview();
+
+    return () => controller.abort();
+  }, [trackingPreviewReloadToken, trackingPreviewRow?.id, trackingPreviewRow?.trackingId]);
 
   const activeFilterChips = useMemo(() => {
     const chips: string[] = [];
@@ -1622,6 +1721,11 @@ export function OrdersReport({
             const deliveryStatus = deliveryStatusForRow(trackingPreviewRow);
             const delayed = isDelayedOrder(trackingPreviewRow, currentDate, deliveryDelayDays);
             const rowIsChecking = checkingRowIds.has(trackingPreviewRow.id);
+            const liveDetails = trackingPreviewData?.details ?? null;
+            const liveStatus = trackingPreviewData?.status ?? null;
+            const previewDeliveryStatus = liveStatus?.deliveryStatus ?? deliveryStatus;
+            const previewTrackingStatus = liveStatus?.trackingStatus ?? trackingPreviewRow.trackingStatus;
+            const previewRawStatus = liveDetails?.rawStatus ?? liveStatus?.rawStatus ?? previewDeliveryStatus;
 
             return (
               <section className="tracking-preview-panel" aria-label={`Tracking preview for ${trackingPreviewRow.trackingId || "shipment"}`}>
@@ -1647,22 +1751,29 @@ export function OrdersReport({
                 </div>
 
                 <div className="tracking-preview-content">
+                  {trackingPreviewLoading ? (
+                    <div className="tracking-preview-loading">
+                      <RefreshCw aria-hidden="true" className="spin" size={18} />
+                      <strong>Loading live tracking page data</strong>
+                    </div>
+                  ) : null}
+
                   <div className="tracking-live-status">
                     <div>
                       <span>Current status</span>
-                      <strong className={`status-pill ${deliveryStatus.toLowerCase().replaceAll(" ", "-")}`}>
-                        {deliveryStatus}
+                      <strong className={`status-pill ${previewDeliveryStatus.toLowerCase().replaceAll(" ", "-")}`}>
+                        {previewRawStatus}
                       </strong>
                       {delayed ? <em>Delayed by configured threshold</em> : null}
                     </div>
                     <div>
-                      <span>Last checked</span>
-                      <strong>{trackingPreviewRow.trackingCheckedAt ? formatDateTime(trackingPreviewRow.trackingCheckedAt) : "Never checked"}</strong>
+                      <span>Last updated on tracking page</span>
+                      <strong>{formatTrackingDateTime(liveDetails?.lastUpdatedAt ?? liveDetails?.lastEventAt)}</strong>
                     </div>
                   </div>
 
                   <section className="tracking-preview-section">
-                    <h3>Shipment</h3>
+                    <h3>Shipment Details</h3>
                     <div className="tracking-preview-grid">
                       <div>
                         <span>Courier</span>
@@ -1673,25 +1784,76 @@ export function OrdersReport({
                         <strong>{trackingPreviewRow.trackingId || "-"}</strong>
                       </div>
                       <div>
-                        <span>Shipped</span>
-                        <strong>{trackingPreviewRow.courierDate ? formatOrderDate(trackingPreviewRow.courierDate) : "-"}</strong>
+                        <span>Booked on</span>
+                        <strong>{formatTrackingDateTime(liveDetails?.bookedAt ?? liveStatus?.courierDate)}</strong>
                       </div>
                       <div>
                         <span>Delivered</span>
-                        <strong>{trackingPreviewRow.deliveryDate ? formatOrderDate(trackingPreviewRow.deliveryDate) : "-"}</strong>
+                        <strong>{formatTrackingDateTime(liveDetails?.deliveredAt ?? liveStatus?.deliveryDate)}</strong>
+                      </div>
+                      <div>
+                        <span>Estimated delivery</span>
+                        <strong>{formatTrackingDateTime(liveDetails?.estimatedDeliveryDate)}</strong>
+                      </div>
+                      <div>
+                        <span>Scheduled delivery</span>
+                        <strong>{formatTrackingDateTime(liveDetails?.scheduledDeliveryDate)}</strong>
+                      </div>
+                      <div>
+                        <span>Origin</span>
+                        <strong>{liveDetails?.origin || "-"}</strong>
+                      </div>
+                      <div>
+                        <span>Destination</span>
+                        <strong>{liveDetails?.destination || "-"}</strong>
+                      </div>
+                      <div>
+                        <span>Reference number</span>
+                        <strong>{liveDetails?.referenceNumber || "-"}</strong>
+                      </div>
+                      <div>
+                        <span>Weight / pieces</span>
+                        <strong>{[liveDetails?.weight, liveDetails?.pieces ? `${liveDetails.pieces} piece${liveDetails.pieces === 1 ? "" : "s"}` : null].filter(Boolean).join(" · ") || "-"}</strong>
                       </div>
                       <div>
                         <span>Tracking status</span>
-                        <strong>{trackingPreviewRow.trackingStatus || "-"}</strong>
+                        <strong>{previewTrackingStatus || "-"}</strong>
                       </div>
                       <div>
                         <span>Delivery status</span>
-                        <strong>{deliveryStatus}</strong>
+                        <strong>{previewDeliveryStatus}</strong>
                       </div>
                     </div>
                   </section>
 
-                  {trackingPreviewRow.trackingCheckError ? (
+                  {liveDetails?.events?.length ? (
+                    <section className="tracking-preview-section">
+                      <h3>Tracking History</h3>
+                      <div className="tracking-timeline">
+                        {liveDetails.events.map((event, index) => (
+                          <article className="tracking-timeline-event" key={`${event.trackedAt ?? "event"}-${event.eventCode ?? index}`}>
+                            <div className="tracking-timeline-dot" />
+                            <div>
+                              <span>{formatTrackingDateTime(event.trackedAt)}</span>
+                              <strong>{event.event}</strong>
+                              {event.location ? <p>{event.location}</p> : null}
+                              {event.nextLocation ? <p>Next: {event.nextLocation}</p> : null}
+                              {event.remarks ? <p>{event.remarks}</p> : null}
+                            </div>
+                          </article>
+                        ))}
+                      </div>
+                    </section>
+                  ) : null}
+
+                  {trackingPreviewError ? (
+                    <div className="tracking-preview-error">
+                      <strong>Could not load tracking page details</strong>
+                      <p>{trackingPreviewError}</p>
+                    </div>
+                  ) : null}
+
+                  {trackingPreviewRow.trackingCheckError && !trackingPreviewError ? (
                     <div className="tracking-preview-error">
                       <strong>Last check failed</strong>
                       <p>{trackingPreviewRow.trackingCheckError}</p>
@@ -1699,17 +1861,20 @@ export function OrdersReport({
                   ) : null}
 
                   <div className="tracking-preview-footer">
-                    {trackingPreviewRow.trackingId && deliveryStatus !== "Delivered" ? (
+                    {trackingPreviewRow.trackingId && previewDeliveryStatus !== "Delivered" ? (
                       <button
                         className="button"
-                        disabled={rowIsChecking}
+                        disabled={rowIsChecking || trackingPreviewLoading}
                         type="button"
                         onClick={() => {
-                          void checkSingleDeliveryStatus(trackingPreviewRow);
+                          void (async () => {
+                            await checkSingleDeliveryStatus(trackingPreviewRow);
+                            setTrackingPreviewReloadToken((value) => value + 1);
+                          })();
                         }}
                       >
-                        <RefreshCw aria-hidden="true" className={rowIsChecking ? "spin" : ""} size={18} />
-                        {rowIsChecking ? "Refreshing" : "Refresh Status"}
+                        <RefreshCw aria-hidden="true" className={rowIsChecking || trackingPreviewLoading ? "spin" : ""} size={18} />
+                        {rowIsChecking || trackingPreviewLoading ? "Refreshing" : "Refresh Status"}
                       </button>
                     ) : null}
                     {previewUrl ? (

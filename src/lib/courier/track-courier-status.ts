@@ -28,10 +28,36 @@ type TrackCourierResponse = {
   is_pending?: boolean;
 };
 
+export type CourierTrackingEvent = {
+  event: string;
+  eventCode: string | null;
+  location: string | null;
+  nextLocation: string | null;
+  remarks: string | null;
+  trackedAt: string | null;
+};
+
+export type CourierTrackingDetails = {
+  bookedAt: string | null;
+  deliveredAt: string | null;
+  destination: string | null;
+  estimatedDeliveryDate: string | null;
+  events: CourierTrackingEvent[];
+  lastEventAt: string | null;
+  lastUpdatedAt: string | null;
+  origin: string | null;
+  pieces: number | null;
+  rawStatus: string;
+  referenceNumber: string | null;
+  scheduledDeliveryDate: string | null;
+  weight: string | null;
+};
+
 export type CourierStatusResult = {
   courierDate: string | null;
   deliveryDate: string | null;
   deliveryStatus: "Pending" | "In Transit" | "Delivered" | "Returned" | "Issue";
+  details?: CourierTrackingDetails;
   rawStatus: string;
   trackingStatus: "Pending" | "Sent" | "In Transit" | "Delivered" | "Failed";
 };

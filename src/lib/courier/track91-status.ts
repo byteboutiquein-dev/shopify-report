@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { CourierStatusResult } from "@/lib/courier/track-courier-status";
+import type { CourierStatusResult, CourierTrackingDetails } from "@/lib/courier/track-courier-status";
 
 const TRACK91_ORIGIN = "https://track91.com";
 const TRACK91_LIVEWIRE_UPDATE_URL = `${TRACK91_ORIGIN}/livewire-83ab8104/update`;
@@ -15,19 +15,50 @@ type Track91LivewireResponse = {
 type Track91Event = {
   event?: string | null;
   event_code?: string | null;
+  location?: {
+    address?: string | null;
+    city?: string | null;
+  } | null;
+  next_location?: {
+    address?: string | null;
+    transport_method?: string | null;
+  } | null;
+  remarks?: string | null;
   tracked_at?: string | null;
 };
 
 type Track91Result = {
+  attributes?: {
+    pieces?: number | null;
+    reference_number?: string | null;
+    weight?: {
+      unit?: string | null;
+      value?: number | string | null;
+    } | null;
+  } | null;
   booked_at?: string | null;
   delivered_at?: string | null;
   delivery_summary?: {
+    estimated_delivery_date?: string | null;
     raw_status?: string | null;
+    scheduled_delivery_date?: string | null;
   } | null;
   event_code?: string | null;
   event_raw?: string | null;
   events?: Track91Event[] | null;
+  last_event_at?: string | null;
+  origin?: {
+    address?: string | null;
+    city?: string | null;
+    postal_code?: string | null;
+  } | null;
+  destination?: {
+    address?: string | null;
+    city?: string | null;
+    postal_code?: string | null;
+  } | null;
   success?: boolean;
+  tracked_at?: string | null;
 };
 
 function decodeHtmlEntities(value: string) {
@@ -171,6 +202,61 @@ function findEventDate(events: Track91Event[] | null | undefined, pattern: RegEx
   return getDateOnly(event?.tracked_at);
 }
 
+function locationLabel(location: Track91Result["origin"] | Track91Event["location"]) {
+  if (!location) {
+    return null;
+  }
+
+  return [location.address, location.city, "postal_code" in location ? location.postal_code : null].filter(Boolean).join(" - ") || null;
+}
+
+function nextLocationLabel(nextLocation: Track91Event["next_location"]) {
+  if (!nextLocation) {
+    return null;
+  }
+
+  return [nextLocation.address, nextLocation.transport_method ? `via ${nextLocation.transport_method}` : null].filter(Boolean).join(" - ") || null;
+}
+
+function weightLabel(weight: { unit?: string | null; value?: number | string | null } | null | undefined) {
+  if (!weight || typeof weight !== "object" || !("value" in weight)) {
+    return null;
+  }
+
+  const value = weight.value;
+
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  return [value, weight.unit].filter(Boolean).join(" ");
+}
+
+function mapTrack91Details(result: Track91Result, rawStatus: string): CourierTrackingDetails {
+  return {
+    bookedAt: result.booked_at ?? null,
+    deliveredAt: result.delivered_at ?? null,
+    destination: locationLabel(result.destination),
+    estimatedDeliveryDate: result.delivery_summary?.estimated_delivery_date ?? null,
+    events: (result.events ?? []).map((event) => ({
+      event: event.event ?? "Tracking update",
+      eventCode: event.event_code ?? null,
+      location: locationLabel(event.location),
+      nextLocation: nextLocationLabel(event.next_location),
+      remarks: event.remarks ?? null,
+      trackedAt: event.tracked_at ?? null
+    })),
+    lastEventAt: result.last_event_at ?? null,
+    lastUpdatedAt: result.tracked_at ?? null,
+    origin: locationLabel(result.origin),
+    pieces: result.attributes?.pieces ?? null,
+    rawStatus,
+    referenceNumber: result.attributes?.reference_number ?? null,
+    scheduledDeliveryDate: result.delivery_summary?.scheduled_delivery_date ?? null,
+    weight: weightLabel(result.attributes?.weight)
+  };
+}
+
 function mapTrack91Status(result: Track91Result): CourierStatusResult {
   const rawStatus = (
     result.event_raw ??
@@ -180,12 +266,14 @@ function mapTrack91Status(result: Track91Result): CourierStatusResult {
   ).trim();
   const statusText = `${rawStatus} ${result.event_code ?? ""}`.toLowerCase();
   const courierDate = getDateOnly(result.booked_at) ?? findEventDate(result.events, /booked|pickup|created/i);
+  const details = mapTrack91Details(result, rawStatus);
 
   if (statusText.includes("deliver")) {
     return {
       courierDate,
       deliveryDate: getDateOnly(result.delivered_at) ?? findEventDate(result.events, /deliver/i),
       deliveryStatus: "Delivered",
+      details,
       rawStatus,
       trackingStatus: "Delivered"
     };
@@ -196,6 +284,7 @@ function mapTrack91Status(result: Track91Result): CourierStatusResult {
       courierDate,
       deliveryDate: null,
       deliveryStatus: "Returned",
+      details,
       rawStatus,
       trackingStatus: "Failed"
     };
@@ -206,6 +295,7 @@ function mapTrack91Status(result: Track91Result): CourierStatusResult {
       courierDate,
       deliveryDate: null,
       deliveryStatus: "Issue",
+      details,
       rawStatus,
       trackingStatus: "Failed"
     };
@@ -223,6 +313,7 @@ function mapTrack91Status(result: Track91Result): CourierStatusResult {
       courierDate,
       deliveryDate: null,
       deliveryStatus: "In Transit",
+      details,
       rawStatus,
       trackingStatus: "In Transit"
     };
@@ -232,6 +323,7 @@ function mapTrack91Status(result: Track91Result): CourierStatusResult {
     courierDate,
     deliveryDate: null,
     deliveryStatus: "Pending",
+    details,
     rawStatus,
     trackingStatus: "Pending"
   };
