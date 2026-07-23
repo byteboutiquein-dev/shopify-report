@@ -117,7 +117,7 @@ async function fetchTrackingRowsPage(orderIds: string[], options: Required<Track
     )
     .not("tracking_id", "is", null)
     .neq("tracking_id", "")
-    .order("created_at", { ascending: true })
+    .order("updated_at", { ascending: false })
     .range(from, to);
 
   if (orderIds.length) {
