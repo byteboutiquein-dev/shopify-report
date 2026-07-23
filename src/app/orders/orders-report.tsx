@@ -342,15 +342,6 @@ function trackingUrlForRow(row: ReportRow) {
   return resolveTrackingUrl(row.courierName, row.trackingId, row.trackingUrl);
 }
 
-function canEmbedTrackingUrl(value: string) {
-  try {
-    const hostname = new URL(value).hostname.replace(/^www\./, "");
-    return !["track91.com", "trackcourier.co", "trackcourier.io", "stcourier.com", "tpcindia.com"].includes(hostname);
-  } catch {
-    return false;
-  }
-}
-
 function formatDateTime(value: string) {
   if (!value) {
     return "Never checked";
@@ -1628,7 +1619,9 @@ export function OrdersReport({
           />
           {(() => {
             const previewUrl = trackingUrlForRow(trackingPreviewRow);
-            const canEmbedPreview = Boolean(previewUrl && canEmbedTrackingUrl(previewUrl));
+            const deliveryStatus = deliveryStatusForRow(trackingPreviewRow);
+            const delayed = isDelayedOrder(trackingPreviewRow, currentDate, deliveryDelayDays);
+            const rowIsChecking = checkingRowIds.has(trackingPreviewRow.id);
 
             return (
               <section className="tracking-preview-panel" aria-label={`Tracking preview for ${trackingPreviewRow.orderId}`}>
@@ -1653,41 +1646,77 @@ export function OrdersReport({
                   </div>
                 </div>
 
-                {previewUrl && canEmbedPreview ? (
-                  <>
-                    <iframe
-                      className="tracking-preview-frame"
-                      loading="lazy"
-                      referrerPolicy="no-referrer"
-                      src={previewUrl}
-                      title={`Tracking page for ${trackingPreviewRow.orderId}`}
-                    />
-                    <p className="tracking-preview-note">
-                      If the courier site blocks preview, use Open to view it in a new tab.
-                    </p>
-                  </>
-                ) : previewUrl ? (
-                  <div className="tracking-preview-blocked">
-                    <div className="tracking-preview-blocked-icon">
-                      <ExternalLink aria-hidden="true" size={34} />
+                <div className="tracking-preview-content">
+                  <div className="tracking-live-status">
+                    <div>
+                      <span>Current status</span>
+                      <strong className={`status-pill ${deliveryStatus.toLowerCase().replaceAll(" ", "-")}`}>
+                        {deliveryStatus}
+                      </strong>
+                      {delayed ? <em>Delayed by configured threshold</em> : null}
                     </div>
                     <div>
-                      <strong>Courier site blocks in-app preview</strong>
-                      <p>
-                        {trackingPreviewRow.courierName || "This courier"} does not allow its tracking page inside another app. Open it in a new tab to view live delivery details.
-                      </p>
+                      <span>Last checked</span>
+                      <strong>{trackingPreviewRow.trackingCheckedAt ? formatDateTime(trackingPreviewRow.trackingCheckedAt) : "Never checked"}</strong>
                     </div>
-                    <a className="button" href={previewUrl} rel="noreferrer" target="_blank">
-                      <ExternalLink aria-hidden="true" size={18} />
-                      Open Tracking Page
-                    </a>
                   </div>
-                ) : (
-                  <div className="empty-state">
-                    <strong>No tracking page available</strong>
-                    <p>Add a tracking ID and courier first.</p>
+
+                  <div className="tracking-preview-grid">
+                    <div>
+                      <span>Courier</span>
+                      <strong>{trackingPreviewRow.courierName || "-"}</strong>
+                    </div>
+                    <div>
+                      <span>Tracking ID</span>
+                      <strong>{trackingPreviewRow.trackingId || "-"}</strong>
+                    </div>
+                    <div>
+                      <span>Shipped</span>
+                      <strong>{trackingPreviewRow.courierDate ? formatOrderDate(trackingPreviewRow.courierDate) : "-"}</strong>
+                    </div>
+                    <div>
+                      <span>Delivered</span>
+                      <strong>{trackingPreviewRow.deliveryDate ? formatOrderDate(trackingPreviewRow.deliveryDate) : "-"}</strong>
+                    </div>
+                    <div>
+                      <span>Tracking status</span>
+                      <strong>{trackingPreviewRow.trackingStatus || "-"}</strong>
+                    </div>
+                    <div>
+                      <span>Delivery status</span>
+                      <strong>{deliveryStatus}</strong>
+                    </div>
                   </div>
-                )}
+
+                  {trackingPreviewRow.trackingCheckError ? (
+                    <div className="tracking-preview-error">
+                      <strong>Last check failed</strong>
+                      <p>{trackingPreviewRow.trackingCheckError}</p>
+                    </div>
+                  ) : null}
+
+                  <div className="tracking-preview-footer">
+                    {trackingPreviewRow.trackingId && deliveryStatus !== "Delivered" ? (
+                      <button
+                        className="button"
+                        disabled={rowIsChecking}
+                        type="button"
+                        onClick={() => {
+                          void checkSingleDeliveryStatus(trackingPreviewRow);
+                        }}
+                      >
+                        <RefreshCw aria-hidden="true" className={rowIsChecking ? "spin" : ""} size={18} />
+                        {rowIsChecking ? "Refreshing" : "Refresh Status"}
+                      </button>
+                    ) : null}
+                    {previewUrl ? (
+                      <a className="button secondary" href={previewUrl} rel="noreferrer" target="_blank">
+                        <ExternalLink aria-hidden="true" size={18} />
+                        Open Courier Page
+                      </a>
+                    ) : null}
+                  </div>
+                </div>
               </section>
             );
           })()}
