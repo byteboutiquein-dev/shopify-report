@@ -494,7 +494,7 @@ export function OrdersReport({
   const [checkingRowIds, setCheckingRowIds] = useState<Set<string>>(() => new Set());
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [trackingPreviewOrderId, setTrackingPreviewOrderId] = useState<string | null>(null);
-  const [trackingPreviewData, setTrackingPreviewData] = useState<TrackingPreviewResponse | null>(null);
+  const [trackingPreviewData, setTrackingPreviewData] = useState<{ orderId: string; response: TrackingPreviewResponse } | null>(null);
   const [trackingPreviewError, setTrackingPreviewError] = useState<string | null>(null);
   const [trackingPreviewLoading, setTrackingPreviewLoading] = useState(false);
   const [trackingPreviewReloadToken, setTrackingPreviewReloadToken] = useState(0);
@@ -606,14 +606,16 @@ export function OrdersReport({
     }
 
     const controller = new AbortController();
+    const previewOrderId = trackingPreviewRow.id;
 
     async function loadTrackingPreview() {
       setTrackingPreviewLoading(true);
+      setTrackingPreviewData(null);
       setTrackingPreviewError(null);
 
       try {
         const response = await fetch("/api/tracking/preview", {
-          body: JSON.stringify({ orderId: trackingPreviewRow?.id }),
+          body: JSON.stringify({ orderId: previewOrderId }),
           cache: "no-store",
           headers: {
             "Content-Type": "application/json"
@@ -627,7 +629,7 @@ export function OrdersReport({
           throw new Error(data.message ?? "Could not load tracking page details.");
         }
 
-        setTrackingPreviewData(data);
+        setTrackingPreviewData({ orderId: previewOrderId, response: data });
       } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") {
           return;
@@ -1721,8 +1723,9 @@ export function OrdersReport({
             const deliveryStatus = deliveryStatusForRow(trackingPreviewRow);
             const delayed = isDelayedOrder(trackingPreviewRow, currentDate, deliveryDelayDays);
             const rowIsChecking = checkingRowIds.has(trackingPreviewRow.id);
-            const liveDetails = trackingPreviewData?.details ?? null;
-            const liveStatus = trackingPreviewData?.status ?? null;
+            const livePreview = trackingPreviewData?.orderId === trackingPreviewRow.id ? trackingPreviewData.response : null;
+            const liveDetails = livePreview?.details ?? null;
+            const liveStatus = livePreview?.status ?? null;
             const previewDeliveryStatus = liveStatus?.deliveryStatus ?? deliveryStatus;
             const previewTrackingStatus = liveStatus?.trackingStatus ?? trackingPreviewRow.trackingStatus;
             const previewRawStatus = liveDetails?.rawStatus ?? liveStatus?.rawStatus ?? previewDeliveryStatus;
