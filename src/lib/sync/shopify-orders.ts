@@ -125,6 +125,7 @@ function addressName(address: ShopifyOrderNode["shippingAddress"] | ShopifyOrder
 
 function mapShopifyOrder(shopId: string, order: ShopifyOrderNode) {
   const customerName = addressName(order.shippingAddress) ?? addressName(order.billingAddress);
+  const shippingState = order.shippingAddress?.province ?? order.shippingAddress?.provinceCode ?? null;
   const orderPayload: Record<string, string | number | null> = {
     shop_id: shopId,
     shopify_order_id: order.id,
@@ -136,6 +137,7 @@ function mapShopifyOrder(shopId: string, order: ShopifyOrderNode) {
     financial_status: order.displayFinancialStatus,
     fulfillment_status: order.displayFulfillmentStatus,
     shipping_city: order.shippingAddress?.city ?? null,
+    shipping_state: shippingState,
     shopify_updated_at: order.updatedAt,
     last_synced_at: new Date().toISOString()
   };
@@ -444,7 +446,7 @@ async function refreshTrackingFromShopifyOrders(shopId: string, shopifyOrders: S
         payload.tracking_status = "Sent";
       }
 
-      if (!row.tracking_url?.trim() && tracking.trackingUrl) {
+      if (tracking.trackingUrl && row.tracking_url !== tracking.trackingUrl) {
         payload.tracking_url = tracking.trackingUrl;
       }
 

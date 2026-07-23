@@ -237,14 +237,18 @@ function mapTrack91Status(result: Track91Result): CourierStatusResult {
   };
 }
 
-export async function fetchTrack91DtdcStatus(trackingId: string): Promise<CourierStatusResult> {
+export async function fetchTrack91Status(
+  courierSlug: "dtdc" | "st-courier",
+  trackingId: string
+): Promise<CourierStatusResult> {
   const normalizedTrackingId = trackingId.trim().toUpperCase();
+  const courierLabel = courierSlug === "dtdc" ? "DTDC" : "ST Courier";
 
   if (!normalizedTrackingId) {
-    throw new Error("Track91 needs a DTDC tracking ID.");
+    throw new Error(`Track91 needs a ${courierLabel} tracking ID.`);
   }
 
-  const trackingUrl = `${TRACK91_ORIGIN}/dtdc/track?n=${encodeURIComponent(normalizedTrackingId)}`;
+  const trackingUrl = `${TRACK91_ORIGIN}/${courierSlug}/track?n=${encodeURIComponent(normalizedTrackingId)}`;
   const cookieJar = new Map<string, string>();
   const pageResponse = await fetch(trackingUrl, {
     headers: browserHeaders(),
@@ -304,8 +308,12 @@ export async function fetchTrack91DtdcStatus(trackingId: string): Promise<Courie
   const result = unwrapTrack91Value(snapshotData.data?.result) as Track91Result | null;
 
   if (!result?.success) {
-    throw new Error("Track91 did not find this DTDC shipment.");
+    throw new Error(`Track91 did not find this ${courierLabel} shipment.`);
   }
 
   return mapTrack91Status(result);
+}
+
+export function fetchTrack91DtdcStatus(trackingId: string) {
+  return fetchTrack91Status("dtdc", trackingId);
 }

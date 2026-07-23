@@ -33,6 +33,7 @@ create table if not exists public.orders (
   customer_email text,
   customer_phone text,
   shipping_city text,
+  shipping_state text,
   total_price numeric(12, 2) not null default 0,
   currency text not null default 'INR',
   financial_status text,
@@ -47,7 +48,8 @@ create table if not exists public.orders (
 
 -- Keep existing databases in sync when this combined setup file is re-run.
 alter table public.orders
-add column if not exists shipping_city text;
+add column if not exists shipping_city text,
+add column if not exists shipping_state text;
 
 create table if not exists public.order_tracking (
   id uuid primary key default gen_random_uuid(),
@@ -220,6 +222,7 @@ create index if not exists orders_shop_date_idx on public.orders (shop_id, order
 create index if not exists orders_order_name_idx on public.orders (order_name);
 create index if not exists orders_customer_name_idx on public.orders (customer_name);
 create index if not exists orders_shipping_city_idx on public.orders (shipping_city);
+create index if not exists orders_shipping_state_idx on public.orders (shipping_state);
 create index if not exists orders_financial_status_idx on public.orders (financial_status);
 create index if not exists orders_fulfillment_status_idx on public.orders (fulfillment_status);
 create index if not exists order_tracking_tracking_id_idx on public.order_tracking (tracking_id) where tracking_id is not null;
@@ -323,6 +326,7 @@ using (public.current_app_role() = 'admin');
 comment on table public.shops is 'Shopify store configuration. Shopify client credentials must stay in server environment variables.';
 comment on table public.orders is 'Shopify-owned order fields synced from Shopify GraphQL Admin API.';
 comment on column public.orders.shipping_city is 'Shipping destination city from Shopify shipping address.';
+comment on column public.orders.shipping_state is 'Shipping destination state/province from Shopify shipping address.';
 comment on table public.order_tracking is 'Manual courier, tracking, and delivery fields owned by operations staff.';
 comment on column public.order_tracking.tracking_checked_at is 'Last time the app checked the courier tracking page.';
 comment on column public.order_tracking.tracking_check_error is 'Last status-check error, if the courier tracking page could not be read.';

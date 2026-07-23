@@ -1,7 +1,6 @@
-const TRACK_COURIER_BASE_URL = "https://trackcourier.io/track-and-trace";
+const TRACK_COURIER_BASE_URL = "https://trackcourier.co/track-and-trace";
 const MYSPEEDPOST_BASE_URL = "https://myspeedpost.com/s";
 const TRACK91_BASE_URL = "https://track91.com";
-const ST_COURIER_TRACK_URL = "https://stcourier.com/track/shipment";
 
 export const supportedCourierOptions = [
   { label: "DTDC", value: "DTDC India" },
@@ -12,7 +11,7 @@ export const supportedCourierOptions = [
 
 const carrierSlugMatchers: Array<{ slug: string; patterns: RegExp[] }> = [
   { slug: "dtdc", patterns: [/\bdtdc\b/i] },
-  { slug: "st-courier", patterns: [/\bst\s*courier\b/i] },
+  { slug: "st-courier", patterns: [/\bst\s*courier\b/i, /^other$/i] },
   { slug: "professional-courier", patterns: [/\bprofessional\b/i] },
   { slug: "india-post-international", patterns: [/\bindia\s*post\s*international\b/i] },
   { slug: "india-post-domestic", patterns: [/\bindia\s*post\b/i, /\bspeed\s*post\b/i] }
@@ -41,8 +40,8 @@ export function isDtdcTrackCourierSlug(slug: string | null | undefined) {
   return slug === "dtdc";
 }
 
-function buildTrack91DtdcUrl(trackingId: string) {
-  return `${TRACK91_BASE_URL}/dtdc/track?n=${encodeURIComponent(trackingId)}`;
+function buildTrack91Url(slug: "dtdc" | "st-courier", trackingId: string) {
+  return `${TRACK91_BASE_URL}/${slug}/track?n=${encodeURIComponent(trackingId)}`;
 }
 
 export function buildTrackCourierUrl(courierName: string | null | undefined, trackingId: string | null | undefined) {
@@ -58,11 +57,11 @@ export function buildTrackCourierUrl(courierName: string | null | undefined, tra
   }
 
   if (isDtdcTrackCourierSlug(slug)) {
-    return buildTrack91DtdcUrl(normalizedTrackingId);
+    return buildTrack91Url("dtdc", normalizedTrackingId);
   }
 
   if (slug === "st-courier") {
-    return ST_COURIER_TRACK_URL;
+    return buildTrack91Url("st-courier", normalizedTrackingId);
   }
 
   return `${TRACK_COURIER_BASE_URL}/${slug}/${encodeURIComponent(normalizedTrackingId)}`;
@@ -84,5 +83,5 @@ export function resolveTrackingUrl(
     return generatedUrl ?? normalizeText(existingUrl);
   }
 
-  return normalizeText(existingUrl) ?? generatedUrl;
+  return generatedUrl ?? normalizeText(existingUrl);
 }

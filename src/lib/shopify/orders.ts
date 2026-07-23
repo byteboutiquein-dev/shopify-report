@@ -31,6 +31,8 @@ function ordersQuery() {
             firstName
             lastName
             name
+            province
+            provinceCode
           }
           shippingChargeMetafield: metafield(namespace: "custom", key: "shipping_charge") {
             key
@@ -86,6 +88,8 @@ export type ShopifyOrderNode = {
     firstName: string | null;
     lastName: string | null;
     name: string | null;
+    province: string | null;
+    provinceCode: string | null;
   } | null;
   shippingChargeMetafield: ShopifyMetafield;
   fulfillments: Array<{

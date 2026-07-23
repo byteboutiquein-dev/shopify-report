@@ -4,6 +4,7 @@ import { SettingsDrawer } from "@/app/settings/settings-drawer";
 import { HeaderSyncCards } from "@/app/sync/header-sync-cards";
 import { getAppSettings } from "@/lib/app-settings";
 import { getEnvStatus } from "@/lib/env";
+import { resolveTrackingUrl } from "@/lib/courier/tracking-links";
 import { getOrdersReportRows, getOrdersReportSummary } from "@/lib/orders/report";
 import { getRecentTrackingCheckLogs } from "@/lib/orders/tracking-logs";
 import { getRecentSyncLogs } from "@/lib/sync/logs";
@@ -200,7 +201,10 @@ export default async function HomePage() {
                               {log.items
                                 .filter((item) => item.status === "Failed")
                                 .slice(0, 10)
-                                .map((item) => (
+                                .map((item) => {
+                                  const trackingUrl = resolveTrackingUrl(item.courier_name, item.tracking_id, item.tracking_url);
+
+                                  return (
                                   <article className="tracking-failure-card" key={item.id}>
                                     <div>
                                       <span>Order</span>
@@ -214,14 +218,15 @@ export default async function HomePage() {
                                       <span>Tracking ID</span>
                                       <strong>{item.tracking_id ?? "No tracking ID"}</strong>
                                     </div>
-                                    {item.tracking_url ? (
-                                      <a className="mini-button" href={item.tracking_url} rel="noreferrer" target="_blank">
+                                    {trackingUrl ? (
+                                      <a className="mini-button" href={trackingUrl} rel="noreferrer" target="_blank">
                                         Open
                                       </a>
                                     ) : null}
                                     <p>{item.error_message ?? "Courier status could not be fetched."}</p>
                                   </article>
-                                ))}
+                                  );
+                                })}
                             </div>
                           ) : null}
                           {log.items.length ? (

@@ -27,6 +27,7 @@ type OrderQueryRow = {
   order_date: string;
   order_name: string;
   shipping_city: string | null;
+  shipping_state: string | null;
   total_price: number;
   customer_name: string | null;
   order_tracking: OrderTrackingJoin | OrderTrackingJoin[] | null;
@@ -46,6 +47,7 @@ export type ReportRow = {
   price: number;
   name: string;
   city: string;
+  state: string;
   confirmText: string;
   courierDate: string;
   courierName: string;
@@ -148,6 +150,7 @@ function mapReportRows(
       price: order.total_price,
       name: order.customer_name ?? "",
       city: order.shipping_city ?? "",
+      state: order.shipping_state ?? "",
       confirmText: communication?.confirm_txt_status ?? "Pending",
       courierDate: tracking?.courier_date ?? "",
       courierName: tracking?.courier_name ?? "",
@@ -173,6 +176,7 @@ const reportSelect = `
   order_date,
   order_name,
   shipping_city,
+  shipping_state,
   total_price,
   customer_name,
   order_tracking (
@@ -311,6 +315,7 @@ function filterReportRows(rows: ReportRow[], input: OrdersReportPageInput) {
         row.courierDate,
         row.courierName,
         row.city,
+        row.state,
         row.courierComments,
         row.trackingId,
         row.trackingCheckedAt,

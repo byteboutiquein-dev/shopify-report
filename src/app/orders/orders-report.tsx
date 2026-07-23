@@ -261,7 +261,7 @@ function csvValueForColumn(
     DATE: row.date,
     "ORDER ID": row.orderId,
     NAME: row.name,
-    CITY: row.city,
+    CITY: cityStateLabel(row),
     "COURIER DATE": row.courierDate,
     "COURIER NAME": row.courierName,
     "COURIER CHARGE": row.courierCharge,
@@ -377,18 +377,16 @@ function formatOrderDate(value: string) {
   }).format(date);
 }
 
-function trackingSourceLabel(value: string) {
-  if (value === "Scheduled") return "Auto check";
-  if (value === "Manual") return "Manual check";
-  return value || "Manual check";
-}
-
 function shippedDateLabel(value: string) {
   return value ? `Shipped ${formatOrderDate(value)}` : "Shipment date missing";
 }
 
-function lastCheckedLabel(value: string, source: string) {
-  return value ? `Last checked ${formatDateTime(value)} · ${trackingSourceLabel(source)}` : "Last checked never";
+function lastCheckedLabel(value: string) {
+  return value ? `Last checked ${formatDateTime(value)}` : "Last checked never";
+}
+
+function cityStateLabel(row: ReportRow) {
+  return [row.city, row.state].filter(Boolean).join(", ") || "-";
 }
 
 function stickyClassForColumn(column: string) {
@@ -1156,7 +1154,12 @@ export function OrdersReport({
                       <td className="sticky-col sticky-col-1">{row.date}</td>
                       <td className="sticky-col sticky-col-2">{row.orderId}</td>
                       <td className="sticky-col sticky-col-3">{row.name || "-"}</td>
-                      <td>{row.city || "-"}</td>
+                      <td>
+                        <div className="stacked-cell">
+                          <strong>{row.city || "-"}</strong>
+                          {row.state ? <span>{row.state}</span> : null}
+                        </div>
+                      </td>
                       <td>
                         <div className="stacked-cell">
                           <strong>{row.courierName || "No courier"}</strong>
@@ -1172,13 +1175,15 @@ export function OrdersReport({
                           ) : (
                             <strong>{row.trackingId || "-"}</strong>
                           )}
-                          <span>{lastCheckedLabel(row.trackingCheckedAt, row.trackingCheckSource)}</span>
                         </div>
                       </td>
                       <td>
-                        <span className={`status-pill ${deliveryStatus.toLowerCase().replaceAll(" ", "-")}`}>
-                          {deliveryStatus}
-                        </span>
+                        <div className="stacked-cell">
+                          <span className={`status-pill ${deliveryStatus.toLowerCase().replaceAll(" ", "-")}`}>
+                            {deliveryStatus}
+                          </span>
+                          <span>{lastCheckedLabel(row.trackingCheckedAt)}</span>
+                        </div>
                       </td>
                       <td>
                         {delayed ? (
@@ -1249,7 +1254,7 @@ export function OrdersReport({
                     <div>
                       <span>{row.date}</span>
                       <strong>{row.orderId}</strong>
-                      <small>{row.name || "No customer name"} · {row.city || "No city"}</small>
+                      <small>{row.name || "No customer name"} · {cityStateLabel(row)}</small>
                     </div>
                     <span className={`status-pill ${deliveryStatus.toLowerCase().replaceAll(" ", "-")}`}>
                       {deliveryStatus}
@@ -1270,7 +1275,7 @@ export function OrdersReport({
                     </div>
                     <div>
                       <span>Last checked</span>
-                      <strong>{lastCheckedLabel(row.trackingCheckedAt, row.trackingCheckSource)}</strong>
+                      <strong>{lastCheckedLabel(row.trackingCheckedAt)}</strong>
                     </div>
                   </div>
                   {delayed ? <span className="status-pill delayed">Delayed</span> : null}
@@ -1360,7 +1365,7 @@ export function OrdersReport({
                   <div>
                     <p className="eyebrow">Order Details</p>
                     <h2>{selectedRow.orderId}</h2>
-                    <p>{selectedRow.name || "No customer name"} · {selectedRow.city || "No city"}</p>
+                    <p>{selectedRow.name || "No customer name"} · {cityStateLabel(selectedRow)}</p>
                   </div>
                   <button className="icon-button" type="button" aria-label="Close order details" onClick={closeOrderDetails}>
                     <X aria-hidden="true" size={18} />
@@ -1424,7 +1429,7 @@ export function OrdersReport({
                     </div>
                     <div>
                       <span>Last checked</span>
-                      <strong>{lastCheckedLabel(selectedRow.trackingCheckedAt, selectedRow.trackingCheckSource)}</strong>
+                      <strong>{lastCheckedLabel(selectedRow.trackingCheckedAt)}</strong>
                     </div>
                   </div>
 
@@ -1452,10 +1457,6 @@ export function OrdersReport({
                     <div>
                       <span>Tracking ID</span>
                       <strong>{selectedRow.trackingId || "-"}</strong>
-                    </div>
-                    <div>
-                      <span>Check type</span>
-                      <strong>{trackingSourceLabel(selectedRow.trackingCheckSource)}</strong>
                     </div>
                   </div>
                   {selectedRow.trackingCheckError ? <p className="error-text">{selectedRow.trackingCheckError}</p> : null}

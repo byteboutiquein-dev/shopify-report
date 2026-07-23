@@ -3,8 +3,7 @@ import "server-only";
 import { createHash } from "node:crypto";
 
 import { fetchMySpeedPostStatus } from "@/lib/courier/myspeedpost-status";
-import { fetchStCourierStatus } from "@/lib/courier/st-courier-status";
-import { fetchTrack91DtdcStatus } from "@/lib/courier/track91-status";
+import { fetchTrack91DtdcStatus, fetchTrack91Status } from "@/lib/courier/track91-status";
 import { getTrackCourierSlug, isIndiaPostTrackCourierSlug } from "@/lib/courier/tracking-links";
 
 const TRACK_COURIER_ORIGIN = "https://trackcourier.io";
@@ -257,7 +256,7 @@ export async function fetchTrackCourierStatus(courierName: string, trackingId: s
   }
 
   if (slug === "st-courier") {
-    return fetchStCourierStatus(trackingId);
+    return fetchTrack91Status("st-courier", trackingId);
   }
 
   if (isIndiaPostTrackCourierSlug(slug)) {
