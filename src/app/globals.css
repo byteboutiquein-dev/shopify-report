@@ -1956,6 +1956,34 @@ th.sticky-col {
   text-transform: uppercase;
 }
 
+.tracking-order-context {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.tracking-order-context > div {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+}
+
+.tracking-order-context span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.tracking-order-context strong {
+  font-size: 16px;
+  overflow-wrap: anywhere;
+}
+
 .tracking-preview-loading {
   align-items: center;
   background: #ffffff;
@@ -2470,7 +2498,8 @@ th.sticky-col {
   }
 
   .tracking-live-status,
-  .tracking-preview-grid {
+  .tracking-preview-grid,
+  .tracking-order-context {
     grid-template-columns: 1fr;
   }
 }

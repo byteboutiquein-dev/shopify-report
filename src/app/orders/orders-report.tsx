@@ -1754,6 +1754,21 @@ export function OrdersReport({
                 </div>
 
                 <div className="tracking-preview-content">
+                  <div className="tracking-order-context">
+                    <div>
+                      <span>Order ID</span>
+                      <strong>{trackingPreviewRow.orderId}</strong>
+                    </div>
+                    <div>
+                      <span>Order name</span>
+                      <strong>{trackingPreviewRow.name || "-"}</strong>
+                    </div>
+                    <div>
+                      <span>Location</span>
+                      <strong>{cityStateLabel(trackingPreviewRow)}</strong>
+                    </div>
+                  </div>
+
                   {trackingPreviewLoading ? (
                     <div className="tracking-preview-loading">
                       <RefreshCw aria-hidden="true" className="spin" size={18} />
