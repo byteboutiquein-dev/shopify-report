@@ -1496,6 +1496,21 @@ th.sticky-col {
   font-size: 12px;
 }
 
+.delivery-status-cell {
+  align-content: center;
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+  min-width: 150px;
+}
+
+.delivery-status-cell .status-meta {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.35;
+}
+
 .row-actions {
   align-items: center;
   display: flex;
@@ -1830,11 +1845,14 @@ th.sticky-col {
 }
 
 .status-pill {
+  align-items: center;
   border-radius: 999px;
   display: inline-flex;
   font-size: 12px;
   font-weight: 800;
+  line-height: 1;
   padding: 5px 9px;
+  white-space: nowrap;
 }
 
 .status-pill.pending {
@@ -1843,8 +1861,8 @@ th.sticky-col {
 }
 
 .status-pill.not-shipped {
-  background: #eef1eb;
-  color: #5e675f;
+  background: #eef2eb;
+  color: #566158;
 }
 
 .status-pill.shipped {

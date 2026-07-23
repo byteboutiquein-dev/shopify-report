@@ -381,8 +381,12 @@ function shippedDateLabel(value: string) {
   return value ? `Shipped ${formatOrderDate(value)}` : "Shipment date missing";
 }
 
-function lastCheckedLabel(value: string) {
-  return value ? `Last checked ${formatDateTime(value)}` : "Last checked never";
+function trackingCheckLabel(row: ReportRow) {
+  if (!row.trackingId) {
+    return "";
+  }
+
+  return row.trackingCheckedAt ? `Checked ${formatDateTime(row.trackingCheckedAt)}` : "Not checked yet";
 }
 
 function cityStateLabel(row: ReportRow) {
@@ -1178,11 +1182,11 @@ export function OrdersReport({
                         </div>
                       </td>
                       <td>
-                        <div className="stacked-cell">
+                        <div className="delivery-status-cell">
                           <span className={`status-pill ${deliveryStatus.toLowerCase().replaceAll(" ", "-")}`}>
                             {deliveryStatus}
                           </span>
-                          <span>{lastCheckedLabel(row.trackingCheckedAt)}</span>
+                          {trackingCheckLabel(row) ? <span className="status-meta">{trackingCheckLabel(row)}</span> : null}
                         </div>
                       </td>
                       <td>
@@ -1275,7 +1279,7 @@ export function OrdersReport({
                     </div>
                     <div>
                       <span>Last checked</span>
-                      <strong>{lastCheckedLabel(row.trackingCheckedAt)}</strong>
+                      <strong>{trackingCheckLabel(row) || "No tracking yet"}</strong>
                     </div>
                   </div>
                   {delayed ? <span className="status-pill delayed">Delayed</span> : null}
@@ -1429,7 +1433,7 @@ export function OrdersReport({
                     </div>
                     <div>
                       <span>Last checked</span>
-                      <strong>{lastCheckedLabel(selectedRow.trackingCheckedAt)}</strong>
+                      <strong>{trackingCheckLabel(selectedRow) || "No tracking yet"}</strong>
                     </div>
                   </div>
 
