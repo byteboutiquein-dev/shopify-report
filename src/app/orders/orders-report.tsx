@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Download, Filter, Info, RefreshCw, Search, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, ExternalLink, Eye, Filter, Info, RefreshCw, Search, X } from "lucide-react";
 
 import type { DuplicateTrackingEntry, OrdersReportSummary, ReportRow } from "@/lib/orders/report";
 import { resolveTrackingUrl, supportedCourierOptions } from "@/lib/courier/tracking-links";
@@ -378,11 +378,23 @@ function formatOrderDate(value: string) {
 }
 
 function courierScanLabel(row: ReportRow) {
+  if (deliveryStatusForRow(row) === "Delivered") {
+    return row.deliveryDate ? `Delivered ${formatOrderDate(row.deliveryDate)}` : "Delivered";
+  }
+
   if (!row.courierName) {
     return "Not shipped yet";
   }
 
-  return row.courierDate ? "Shipped" : "Waiting for courier scan";
+  return row.courierDate ? `Shipped ${formatOrderDate(row.courierDate)}` : "Waiting for courier scan";
+}
+
+function deliveryStatusMetaLabel(row: ReportRow) {
+  if (deliveryStatusForRow(row) === "Delivered") {
+    return row.deliveryDate ? `Delivered ${formatOrderDate(row.deliveryDate)}` : "";
+  }
+
+  return trackingCheckLabel(row);
 }
 
 function trackingCheckLabel(row: ReportRow) {
@@ -433,6 +445,7 @@ export function OrdersReport({
   const [savingRowIds, setSavingRowIds] = useState<Set<string>>(() => new Set());
   const [checkingRowIds, setCheckingRowIds] = useState<Set<string>>(() => new Set());
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [trackingPreviewOrderId, setTrackingPreviewOrderId] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ type: "success" | "warning" | "error"; message: string } | null>(null);
   const [drawerNotice, setDrawerNotice] = useState<{ type: "success" | "warning" | "error"; message: string } | null>(null);
   useEffect(() => {
@@ -488,6 +501,7 @@ export function OrdersReport({
           total: data.totalRows ?? data.rows.length
         });
         setSelectedOrderId((current) => (current && data.rows?.some((row) => row.id === current) ? current : null));
+        setTrackingPreviewOrderId((current) => (current && data.rows?.some((row) => row.id === current) ? current : null));
       } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") {
           return;
@@ -528,6 +542,10 @@ export function OrdersReport({
   const selectedRow = useMemo(
     () => (selectedOrderId ? rows.find((row) => row.id === selectedOrderId) ?? null : null),
     [rows, selectedOrderId]
+  );
+  const trackingPreviewRow = useMemo(
+    () => (trackingPreviewOrderId ? rows.find((row) => row.id === trackingPreviewOrderId) ?? null : null),
+    [rows, trackingPreviewOrderId]
   );
 
   const activeFilterChips = useMemo(() => {
@@ -1156,6 +1174,7 @@ export function OrdersReport({
                   const delayed = isDelayedOrder(row, currentDate, deliveryDelayDays);
                   const rowIsChecking = checkingRowIds.has(row.id);
                   const trackingUrl = trackingUrlForRow(row);
+                  const deliveryMeta = deliveryStatusMetaLabel(row);
 
                   return (
                     <tr key={row.id}>
@@ -1187,10 +1206,22 @@ export function OrdersReport({
                       </td>
                       <td>
                         <div className="delivery-status-cell">
-                          <span className={`status-pill ${deliveryStatus.toLowerCase().replaceAll(" ", "-")}`}>
-                            {deliveryStatus}
-                          </span>
-                          {trackingCheckLabel(row) ? <span className="status-meta">{trackingCheckLabel(row)}</span> : null}
+                          <div className="delivery-status-main">
+                            <span className={`status-pill ${deliveryStatus.toLowerCase().replaceAll(" ", "-")}`}>
+                              {deliveryStatus}
+                            </span>
+                            {trackingUrl ? (
+                              <button
+                                aria-label={`Preview tracking page for ${row.orderId}`}
+                                className="tracking-preview-button"
+                                type="button"
+                                onClick={() => setTrackingPreviewOrderId(row.id)}
+                              >
+                                <Eye aria-hidden="true" size={14} />
+                              </button>
+                            ) : null}
+                          </div>
+                          {deliveryMeta ? <span className="status-meta">{deliveryMeta}</span> : null}
                         </div>
                       </td>
                       <td>
@@ -1255,6 +1286,7 @@ export function OrdersReport({
               const delayed = isDelayedOrder(row, currentDate, deliveryDelayDays);
               const rowIsChecking = checkingRowIds.has(row.id);
               const trackingUrl = trackingUrlForRow(row);
+              const deliveryMeta = deliveryStatusMetaLabel(row);
 
               return (
                 <article className="mobile-order-card" key={row.id}>
@@ -1268,30 +1300,32 @@ export function OrdersReport({
                       {deliveryStatus}
                     </span>
                   </div>
+                  {deliveryMeta ? <span className="status-meta">{deliveryMeta}</span> : null}
                   <div className="mobile-order-card-grid">
                     <div>
                       <span>Courier</span>
                       <strong>{row.courierName || "No courier"}</strong>
                     </div>
                     <div>
-                      <span>Courier scan</span>
-                      <strong>{row.courierDate ? formatOrderDate(row.courierDate) : row.courierName ? "Waiting for scan" : "Not shipped yet"}</strong>
+                      <span>Shipment</span>
+                      <strong>{courierScanLabel(row)}</strong>
                     </div>
                     <div>
                       <span>Tracking</span>
                       <strong>{row.trackingId || "-"}</strong>
                     </div>
                     <div>
-                      <span>Last checked</span>
+                      <span>Tracking check</span>
                       <strong>{trackingCheckLabel(row) || "No tracking yet"}</strong>
                     </div>
                   </div>
                   {delayed ? <span className="status-pill delayed">Delayed</span> : null}
                   <div className="row-actions">
                     {trackingUrl ? (
-                      <a className="mini-button" href={trackingUrl} rel="noreferrer" target="_blank">
-                        Open Tracking
-                      </a>
+                      <button className="mini-button" type="button" onClick={() => setTrackingPreviewOrderId(row.id)}>
+                        <Eye aria-hidden="true" size={13} />
+                        Preview Tracking
+                      </button>
                     ) : null}
                     {row.trackingId && deliveryStatus !== "Delivered" ? (
                       <button
@@ -1428,8 +1462,8 @@ export function OrdersReport({
                       <strong>{selectedRow.courierName || "-"}</strong>
                     </div>
                     <div>
-                      <span>Courier scan</span>
-                      <strong>{selectedRow.courierDate ? formatOrderDate(selectedRow.courierDate) : selectedRow.courierName ? "Waiting for scan" : "Not shipped yet"}</strong>
+                      <span>Shipment</span>
+                      <strong>{courierScanLabel(selectedRow)}</strong>
                     </div>
                     <div>
                       <span>Delivery date</span>
@@ -1470,9 +1504,16 @@ export function OrdersReport({
                   {selectedRow.trackingCheckError ? <p className="error-text">{selectedRow.trackingCheckError}</p> : null}
                   <div className="drawer-actions">
                     {trackingUrl ? (
-                      <a className="button secondary" href={trackingUrl} rel="noreferrer" target="_blank">
-                        Open Tracking Page
-                      </a>
+                      <>
+                        <button className="button secondary" type="button" onClick={() => setTrackingPreviewOrderId(selectedRow.id)}>
+                          <Eye aria-hidden="true" size={18} />
+                          Preview Tracking
+                        </button>
+                        <a className="button secondary" href={trackingUrl} rel="noreferrer" target="_blank">
+                          <ExternalLink aria-hidden="true" size={18} />
+                          Open Tracking Page
+                        </a>
+                      </>
                     ) : null}
                     {selectedRow.trackingId && deliveryStatus !== "Delivered" ? (
                       <button
@@ -1563,6 +1604,65 @@ export function OrdersReport({
                   </label>
                 </section>
               </aside>
+            );
+          })()}
+        </div>
+      ) : null}
+
+      {trackingPreviewRow ? (
+        <div className="tracking-preview-layer">
+          <button
+            aria-label="Close tracking preview"
+            className="tracking-preview-scrim"
+            type="button"
+            onClick={() => setTrackingPreviewOrderId(null)}
+          />
+          {(() => {
+            const previewUrl = trackingUrlForRow(trackingPreviewRow);
+
+            return (
+              <section className="tracking-preview-panel" aria-label={`Tracking preview for ${trackingPreviewRow.orderId}`}>
+                <div className="tracking-preview-header">
+                  <div>
+                    <p className="eyebrow">Tracking Preview</p>
+                    <h2>{trackingPreviewRow.orderId}</h2>
+                    <p>
+                      {trackingPreviewRow.courierName || "No courier"} · {trackingPreviewRow.trackingId || "No tracking ID"}
+                    </p>
+                  </div>
+                  <div className="tracking-preview-actions">
+                    {previewUrl ? (
+                      <a className="mini-button" href={previewUrl} rel="noreferrer" target="_blank">
+                        <ExternalLink aria-hidden="true" size={14} />
+                        Open
+                      </a>
+                    ) : null}
+                    <button className="icon-button" type="button" aria-label="Close tracking preview" onClick={() => setTrackingPreviewOrderId(null)}>
+                      <X aria-hidden="true" size={18} />
+                    </button>
+                  </div>
+                </div>
+
+                {previewUrl ? (
+                  <>
+                    <iframe
+                      className="tracking-preview-frame"
+                      loading="lazy"
+                      referrerPolicy="no-referrer"
+                      src={previewUrl}
+                      title={`Tracking page for ${trackingPreviewRow.orderId}`}
+                    />
+                    <p className="tracking-preview-note">
+                      If the courier site blocks preview, use Open to view it in a new tab.
+                    </p>
+                  </>
+                ) : (
+                  <div className="empty-state">
+                    <strong>No tracking page available</strong>
+                    <p>Add a tracking ID and courier first.</p>
+                  </div>
+                )}
+              </section>
             );
           })()}
         </div>
