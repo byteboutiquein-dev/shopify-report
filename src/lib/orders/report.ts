@@ -239,7 +239,7 @@ function deliveryStatusForReportRow(row: ReportRow) {
   }
 
   if (row.trackingId.trim() && row.deliveryStatus === "Pending") {
-    return "Shipped";
+    return "Tracking Added";
   }
 
   return row.deliveryStatus;
@@ -340,7 +340,7 @@ function filterReportRows(rows: ReportRow[], input: OrdersReportPageInput) {
     const focusMatches =
       !input.focusStatus ||
       (input.focusStatus === "review-pending" && !isMessageSent(row.reviewText)) ||
-      (input.focusStatus === "moving" && (deliveryStatus === "In Transit" || deliveryStatus === "Shipped"));
+      (input.focusStatus === "moving" && (deliveryStatus === "In Transit" || deliveryStatus === "Tracking Added"));
 
     return searchMatches && courierMatches && deliveryMatches && delayMatches && focusMatches;
   });
@@ -361,7 +361,7 @@ function summarizeReportRows(rows: ReportRow[], input: OrdersReportSummaryInput)
         summary.notShipped += 1;
       }
 
-      if (deliveryStatus === "In Transit" || deliveryStatus === "Shipped") {
+      if (deliveryStatus === "In Transit" || deliveryStatus === "Tracking Added") {
         summary.inTransit += 1;
       }
 

@@ -1865,7 +1865,8 @@ th.sticky-col {
   color: #566158;
 }
 
-.status-pill.shipped {
+.status-pill.shipped,
+.status-pill.tracking-added {
   background: #eaf4ff;
   color: #2e618d;
 }

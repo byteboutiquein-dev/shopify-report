@@ -151,7 +151,7 @@ function deliveryStatusForRow(row: ReportRow) {
   }
 
   if (row.trackingId.trim() && row.deliveryStatus === "Pending") {
-    return "Shipped";
+    return "Tracking Added";
   }
 
   return row.deliveryStatus;
@@ -377,8 +377,12 @@ function formatOrderDate(value: string) {
   }).format(date);
 }
 
-function shippedDateLabel(value: string) {
-  return value ? `Shipped ${formatOrderDate(value)}` : "Shipment date missing";
+function courierScanLabel(row: ReportRow) {
+  if (!row.courierName) {
+    return "Not shipped yet";
+  }
+
+  return row.courierDate ? `Courier scan ${formatOrderDate(row.courierDate)}` : "Waiting for courier scan";
 }
 
 function trackingCheckLabel(row: ReportRow) {
@@ -976,7 +980,7 @@ export function OrdersReport({
         >
           <span>In Transit</span>
           <strong>{rangeSummary.inTransit}</strong>
-          <small>Shipped or moving</small>
+          <small>Tracking added or moving</small>
         </button>
         <button
           className={`ops-card ${filters.deliveryStatus === "Delivered" ? "active" : ""}`}
@@ -1167,7 +1171,7 @@ export function OrdersReport({
                       <td>
                         <div className="stacked-cell">
                           <strong>{row.courierName || "No courier"}</strong>
-                          <span>{row.courierName ? shippedDateLabel(row.courierDate) : "Not shipped yet"}</span>
+                          <span>{courierScanLabel(row)}</span>
                         </div>
                       </td>
                       <td>
@@ -1270,8 +1274,8 @@ export function OrdersReport({
                       <strong>{row.courierName || "No courier"}</strong>
                     </div>
                     <div>
-                      <span>Shipped</span>
-                      <strong>{row.courierName ? formatOrderDate(row.courierDate) || "Date missing" : "Not shipped yet"}</strong>
+                      <span>Courier scan</span>
+                      <strong>{row.courierDate ? formatOrderDate(row.courierDate) : row.courierName ? "Waiting for scan" : "Not shipped yet"}</strong>
                     </div>
                     <div>
                       <span>Tracking</span>
@@ -1424,8 +1428,8 @@ export function OrdersReport({
                       <strong>{selectedRow.courierName || "-"}</strong>
                     </div>
                     <div>
-                      <span>Shipped</span>
-                      <strong>{selectedRow.courierName ? formatOrderDate(selectedRow.courierDate) || "Date missing" : "Not shipped yet"}</strong>
+                      <span>Courier scan</span>
+                      <strong>{selectedRow.courierDate ? formatOrderDate(selectedRow.courierDate) : selectedRow.courierName ? "Waiting for scan" : "Not shipped yet"}</strong>
                     </div>
                     <div>
                       <span>Delivery date</span>
