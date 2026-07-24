@@ -40,6 +40,14 @@ type Filters = {
 
 type DateRangePreset = "today" | "last-7" | "last-14" | "last-30" | "this-month" | "last-month" | "custom";
 
+type TableFilterKey = "focusStatus" | "search" | "courierName" | "deliveryStatus" | "delayStatus";
+
+type ActiveFilterChip = {
+  key: TableFilterKey;
+  label: string;
+  value: string;
+};
+
 type Draft = {
   courierDate: string;
   courierName: string;
@@ -649,24 +657,46 @@ export function OrdersReport({
     return () => controller.abort();
   }, [trackingPreviewReloadToken, trackingPreviewRow?.id, trackingPreviewRow?.trackingId]);
 
-  const activeFilterChips = useMemo(() => {
-    const chips: string[] = [];
+  const selectedRangeLabel = dateRangeOptions.find((option) => option.value === dateRangePreset)?.label ?? "Custom";
+  const activeFilterChips = useMemo<ActiveFilterChip[]>(() => {
+    const chips: ActiveFilterChip[] = [];
 
-    if (filters.search.trim()) chips.push(`Search: ${filters.search.trim()}`);
-    if (filters.startDate || filters.endDate) chips.push(`Date: ${filters.startDate || "Start"} to ${filters.endDate || "Today"}`);
-    if (filters.courierName) chips.push(`Courier: ${filters.courierName}`);
-    if (filters.deliveryStatus) chips.push(`Delivery: ${filters.deliveryStatus}`);
-    if (filters.delayStatus === "delayed") chips.push("Delayed only");
-    if (filters.delayStatus === "not-delayed") chips.push("Not delayed");
-    if (filters.focusStatus === "moving") chips.push("Moving orders");
-    if (filters.focusStatus === "review-pending") chips.push("Review pending");
+    if (filters.search.trim()) chips.push({ key: "search", label: "Search", value: filters.search.trim() });
+    if (filters.courierName) chips.push({ key: "courierName", label: "Courier", value: filters.courierName });
+    if (filters.deliveryStatus) chips.push({ key: "deliveryStatus", label: "Delivery", value: filters.deliveryStatus });
+    if (filters.delayStatus === "delayed") chips.push({ key: "delayStatus", label: "Delay", value: "Delayed" });
+    if (filters.delayStatus === "not-delayed") chips.push({ key: "delayStatus", label: "Delay", value: "Not delayed" });
+    if (filters.focusStatus === "moving") chips.push({ key: "focusStatus", label: "Dashboard", value: "In Transit" });
+    if (filters.focusStatus === "review-pending") chips.push({ key: "focusStatus", label: "Dashboard", value: "Review Pending" });
 
     return chips;
   }, [filters]);
+  const hasTableFilters = activeFilterChips.length > 0;
 
   function updateFilter(key: keyof Filters, value: string) {
     setFilters((current) => ({ ...current, [key]: value }));
     setPage(1);
+  }
+
+  function clearTableFilters() {
+    setFilters((current) => ({
+      ...current,
+      ...emptyFilters
+    }));
+    setSortKey("date-desc");
+    setPage(1);
+    setSelectedOrderId(null);
+    setNotice(null);
+  }
+
+  function removeTableFilter(key: TableFilterKey) {
+    setFilters((current) => ({
+      ...current,
+      [key]: ""
+    }));
+    setPage(1);
+    setSelectedOrderId(null);
+    setNotice(null);
   }
 
   function updateCustomDate(key: "startDate" | "endDate", value: string) {
@@ -760,15 +790,7 @@ export function OrdersReport({
   }
 
   function showAllInCurrentRange() {
-    setFilters((current) => ({
-      ...emptyFilters,
-      endDate: current.endDate,
-      startDate: current.startDate
-    }));
-    setSortKey("date-desc");
-    setPage(1);
-    setSelectedOrderId(null);
-    setNotice(null);
+    clearTableFilters();
   }
 
   function closeOrderDetails() {
@@ -1122,24 +1144,59 @@ export function OrdersReport({
       </section>
 
       <div className="toolbar" aria-label="Report actions">
-        <div className="search-field">
+        <div className={`search-field ${filters.search.trim() ? "has-value" : ""}`}>
           <Search aria-hidden="true" size={18} />
           <input
-            aria-label="Search by order, customer, or tracking ID"
-            placeholder="Search order, name, tracking"
+            aria-label="Search by order, customer, city, courier, or tracking ID"
+            placeholder="Search order, customer, city, courier, tracking"
             value={filters.search}
             onChange={(event) => updateFilter("search", event.target.value)}
           />
+          {filters.search.trim() ? (
+            <button
+              aria-label="Clear search"
+              className="search-clear-button"
+              type="button"
+              onClick={() => removeTableFilter("search")}
+            >
+              <X aria-hidden="true" size={16} />
+            </button>
+          ) : null}
         </div>
-        <button className="button secondary" type="button" onClick={clearFilters}>
-          <X aria-hidden="true" size={18} />
-          Clear
-        </button>
         <button className="button" type="button" onClick={exportFilteredRows}>
           <Download aria-hidden="true" size={18} />
           Export
         </button>
       </div>
+
+      <section className="active-filter-bar" aria-label="Active report filters">
+        <div className="active-filter-copy">
+          <span className="active-range-chip">
+            Range: {selectedRangeLabel} · {filters.startDate || "Start"} to {filters.endDate || "Today"}
+          </span>
+          {hasTableFilters ? (
+            activeFilterChips.map((chip) => (
+              <button
+                className="active-filter-chip removable"
+                key={`${chip.key}-${chip.value}`}
+                type="button"
+                onClick={() => removeTableFilter(chip.key)}
+              >
+                <span>{chip.label}: {chip.value}</span>
+                <X aria-hidden="true" size={13} />
+              </button>
+            ))
+          ) : (
+            <span className="active-filter-empty">No table filters active</span>
+          )}
+        </div>
+        {hasTableFilters ? (
+          <button className="button secondary compact-action" type="button" onClick={clearTableFilters}>
+            <X aria-hidden="true" size={16} />
+            Clear all table filters
+          </button>
+        ) : null}
+      </section>
 
       {loadingPage ? (
         <div className="running-state">
@@ -1206,7 +1263,7 @@ export function OrdersReport({
               ))}
             </select>
           </label>
-          <label className="field compact">
+          <label className={`field compact ${filters.courierName ? "active-select-field" : ""}`}>
             <span>Courier</span>
             <select value={filters.courierName} onChange={(event) => updateFilter("courierName", event.target.value)}>
               <option value="">Any courier</option>
@@ -1215,7 +1272,7 @@ export function OrdersReport({
               ))}
             </select>
           </label>
-          <label className="field compact">
+          <label className={`field compact ${filters.deliveryStatus ? "active-select-field" : ""}`}>
             <span>Delivery Status</span>
             <select value={filters.deliveryStatus} onChange={(event) => updateFilter("deliveryStatus", event.target.value)}>
               <option value="">Any</option>
@@ -1224,7 +1281,7 @@ export function OrdersReport({
               ))}
             </select>
           </label>
-          <label className="field compact">
+          <label className={`field compact ${filters.delayStatus ? "active-select-field" : ""}`}>
             <span>Delay</span>
             <select value={filters.delayStatus} onChange={(event) => updateFilter("delayStatus", event.target.value)}>
               <option value="">Any</option>
@@ -1234,13 +1291,9 @@ export function OrdersReport({
           </label>
         </div>
 
-        <div className="active-filter-row" aria-label="Active filters">
-          {activeFilterChips.length ? (
-            activeFilterChips.map((chip) => <span className="active-filter-chip" key={chip}>{chip}</span>)
-          ) : (
-            <span className="active-filter-empty">No filters active</span>
-          )}
-        </div>
+        <p className="filter-console-hint">
+          Table filters refine the selected date range. Active filters appear above the table and can be removed one by one.
+        </p>
       </section>
 
       {notice ? (
@@ -1371,7 +1424,7 @@ export function OrdersReport({
                       <strong>No orders match these filters</strong>
                       <p>Try clearing filters, widening the date range, or checking a different courier/status.</p>
                       <button className="button secondary" type="button" onClick={clearFilters}>
-                        Clear filters
+                        Reset default view
                       </button>
                     </div>
                   </td>
@@ -1462,7 +1515,7 @@ export function OrdersReport({
               <strong>No orders match these filters</strong>
               <p>Try clearing filters, widening the date range, or checking a different courier/status.</p>
               <button className="button secondary" type="button" onClick={clearFilters}>
-                Clear filters
+                Reset default view
               </button>
             </div>
           )}
