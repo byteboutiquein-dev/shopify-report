@@ -1101,6 +1101,14 @@ button:disabled {
   gap: 8px;
 }
 
+.active-filter-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 .active-range-chip,
 .active-filter-chip,
 .active-filter-empty {
@@ -2539,6 +2547,7 @@ th.sticky-col {
     flex-direction: column;
   }
 
+  .active-filter-actions,
   .active-filter-bar .button {
     justify-content: center;
     width: 100%;

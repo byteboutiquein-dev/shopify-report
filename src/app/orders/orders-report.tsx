@@ -658,6 +658,7 @@ export function OrdersReport({
   }, [trackingPreviewReloadToken, trackingPreviewRow?.id, trackingPreviewRow?.trackingId]);
 
   const selectedRangeLabel = dateRangeOptions.find((option) => option.value === dateRangePreset)?.label ?? "Custom";
+  const defaultDateRange = getDateRangeForPreset("last-7", currentDate);
   const activeFilterChips = useMemo<ActiveFilterChip[]>(() => {
     const chips: ActiveFilterChip[] = [];
 
@@ -672,6 +673,13 @@ export function OrdersReport({
     return chips;
   }, [filters]);
   const hasTableFilters = activeFilterChips.length > 0;
+  const isDefaultView =
+    dateRangePreset === "last-7" &&
+    filters.startDate === defaultDateRange.startDate &&
+    filters.endDate === defaultDateRange.endDate &&
+    !hasTableFilters &&
+    sortKey === "date-desc" &&
+    pageSize === 100;
 
   function updateFilter(key: keyof Filters, value: string) {
     setFilters((current) => ({ ...current, [key]: value }));
@@ -1190,12 +1198,19 @@ export function OrdersReport({
             <span className="active-filter-empty">No table filters active</span>
           )}
         </div>
-        {hasTableFilters ? (
-          <button className="button secondary compact-action" type="button" onClick={clearTableFilters}>
-            <X aria-hidden="true" size={16} />
-            Clear all table filters
-          </button>
-        ) : null}
+        <div className="active-filter-actions">
+          {hasTableFilters ? (
+            <button className="button secondary compact-action" type="button" onClick={clearTableFilters}>
+              <X aria-hidden="true" size={16} />
+              Clear table filters
+            </button>
+          ) : null}
+          {!isDefaultView ? (
+            <button className="button secondary compact-action" type="button" onClick={clearFilters}>
+              Reset default view
+            </button>
+          ) : null}
+        </div>
       </section>
 
       {loadingPage ? (
@@ -1231,12 +1246,12 @@ export function OrdersReport({
       <section className="filter-console" aria-label="Report filters">
         <div className="filter-console-header">
           <div>
-            <p className="eyebrow">Filter Console</p>
-            <h2>Refine the report table</h2>
+            <p className="eyebrow">Table Controls</p>
+            <h2>Sort, page, and refine orders</h2>
           </div>
           <div className="filter-console-count">
             <strong>{totalRows}</strong>
-            <span>matching filters</span>
+            <span>matching orders</span>
           </div>
         </div>
 
@@ -1253,7 +1268,7 @@ export function OrdersReport({
             </select>
           </label>
           <label className="field compact">
-            <span>Rows</span>
+            <span>Rows per page</span>
             <select value={pageSize} onChange={(event) => {
               setPageSize(Number(event.target.value) as typeof pageSize);
               setPage(1);
@@ -1292,7 +1307,7 @@ export function OrdersReport({
         </div>
 
         <p className="filter-console-hint">
-          Table filters refine the selected date range. Active filters appear above the table and can be removed one by one.
+          These controls apply inside the selected date range. Active filters appear above the table and can be removed one by one.
         </p>
       </section>
 
@@ -1310,7 +1325,7 @@ export function OrdersReport({
       <section className="panel">
         <div className="panel-header">
           <h2>Orders Report</h2>
-          <span className="badge ready">{pageRows.length} shown · {totalRows} matching</span>
+          <span className="badge ready">{pageRows.length} shown · {totalRows} matching orders</span>
         </div>
         <div className="table-wrap">
           <table className="orders-table">
