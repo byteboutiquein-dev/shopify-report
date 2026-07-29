@@ -203,48 +203,32 @@ function findEventDate(events: Track91Event[] | null | undefined, pattern: RegEx
   return getDateOnly(event?.tracked_at);
 }
 
-function eventHasReverseFlow(event: Track91Event) {
-  if (!event.attributes || typeof event.attributes !== "object") {
-    return false;
-  }
-
-  return JSON.stringify(event.attributes).toLowerCase().includes('"flow":"reverse"');
-}
-
-function isReturnToSenderResult(result: Track91Result) {
-  const eventText = [
-    result.event_code,
-    result.event_raw,
-    result.delivery_summary?.raw_status,
-    ...(result.events ?? []).flatMap((event) => [event.event_code, event.event, event.remarks])
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
-
-  return (
-    eventText.includes("return_to_sender") ||
-    eventText.includes("returned to sender") ||
-    eventText.includes("returning to sender") ||
-    eventText.includes("delivered to sender") ||
-    eventText.includes("rto") ||
-    Boolean(result.events?.some(eventHasReverseFlow))
-  );
-}
-
-function isDeliveredResult(result: Track91Result, rawStatus: string) {
-  const currentText = [
+function currentReadableStatusText(result: Track91Result, rawStatus: string) {
+  return [
     rawStatus,
     result.event_raw,
-    result.event_code,
+    result.delivery_summary?.raw_status,
     result.events?.[0]?.event,
-    result.events?.[0]?.event_code
+    result.events?.[0]?.remarks
   ]
     .filter(Boolean)
     .join(" ")
     .toLowerCase();
+}
 
+function isDeliveredStatus(currentText: string) {
   return /\bdelivered\b/.test(currentText) && !currentText.includes("undelivered");
+}
+
+function isReturnToSenderStatus(currentText: string) {
+  return (
+    /\brto\b/.test(currentText) ||
+    /\brtb\b/.test(currentText) ||
+    currentText.includes("return to sender") ||
+    currentText.includes("returned to sender") ||
+    currentText.includes("returning to sender") ||
+    currentText.includes("delivered to sender")
+  );
 }
 
 function locationLabel(location: Track91Result["origin"] | Track91Event["location"]) {
@@ -310,9 +294,10 @@ function mapTrack91Status(result: Track91Result): CourierStatusResult {
     "Pending"
   ).trim();
   const statusText = `${rawStatus} ${result.event_code ?? ""}`.toLowerCase();
+  const readableStatusText = currentReadableStatusText(result, rawStatus);
   const courierDate = getDateOnly(result.booked_at) ?? findEventDate(result.events, /booked|pickup|created/i);
-  const returnToSender = isReturnToSenderResult(result);
-  const delivered = isDeliveredResult(result, rawStatus);
+  const returnToSender = isReturnToSenderStatus(readableStatusText);
+  const delivered = isDeliveredStatus(readableStatusText);
   const displayRawStatus = returnToSender && !delivered ? "RTO" : rawStatus;
   const details = mapTrack91Details(result, displayRawStatus);
 
@@ -327,7 +312,7 @@ function mapTrack91Status(result: Track91Result): CourierStatusResult {
     };
   }
 
-  if (returnToSender || statusText.includes("return") || statusText.includes("rto")) {
+  if (returnToSender) {
     return {
       courierDate,
       deliveryDate: null,
