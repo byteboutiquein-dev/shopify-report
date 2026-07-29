@@ -13,6 +13,7 @@ type Track91LivewireResponse = {
 };
 
 type Track91Event = {
+  attributes?: unknown;
   event?: string | null;
   event_code?: string | null;
   location?: {
@@ -128,7 +129,7 @@ function extractTrackerSnapshot(html: string) {
 }
 
 function extractCsrfToken(html: string) {
-  const token = html.match(/data-csrf="([^"]+)"/)?.[1];
+  const token = html.match(/data-csrf="([^"]+)"/)?.[1] ?? html.match(/<meta name="csrf-token" content="([^"]+)"/)?.[1];
 
   if (!token) {
     throw new Error("Track91 did not return a CSRF token.");
@@ -202,6 +203,35 @@ function findEventDate(events: Track91Event[] | null | undefined, pattern: RegEx
   return getDateOnly(event?.tracked_at);
 }
 
+function eventHasReverseFlow(event: Track91Event) {
+  if (!event.attributes || typeof event.attributes !== "object") {
+    return false;
+  }
+
+  return JSON.stringify(event.attributes).toLowerCase().includes('"flow":"reverse"');
+}
+
+function isReturnToSenderResult(result: Track91Result) {
+  const eventText = [
+    result.event_code,
+    result.event_raw,
+    result.delivery_summary?.raw_status,
+    ...(result.events ?? []).flatMap((event) => [event.event_code, event.event, event.remarks])
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  return (
+    eventText.includes("return_to_sender") ||
+    eventText.includes("returned to sender") ||
+    eventText.includes("returning to sender") ||
+    eventText.includes("delivered to sender") ||
+    eventText.includes("rto") ||
+    Boolean(result.events?.some(eventHasReverseFlow))
+  );
+}
+
 function locationLabel(location: Track91Result["origin"] | Track91Event["location"]) {
   if (!location) {
     return null;
@@ -266,7 +296,20 @@ function mapTrack91Status(result: Track91Result): CourierStatusResult {
   ).trim();
   const statusText = `${rawStatus} ${result.event_code ?? ""}`.toLowerCase();
   const courierDate = getDateOnly(result.booked_at) ?? findEventDate(result.events, /booked|pickup|created/i);
-  const details = mapTrack91Details(result, rawStatus);
+  const returnToSender = isReturnToSenderResult(result);
+  const displayRawStatus = returnToSender && statusText.includes("deliver") ? "Delivered to Sender" : rawStatus;
+  const details = mapTrack91Details(result, displayRawStatus);
+
+  if (returnToSender || statusText.includes("return") || statusText.includes("rto")) {
+    return {
+      courierDate,
+      deliveryDate: getDateOnly(result.delivered_at) ?? findEventDate(result.events, /deliver/i),
+      deliveryStatus: "Returned",
+      details,
+      rawStatus: displayRawStatus,
+      trackingStatus: "Failed"
+    };
+  }
 
   if (statusText.includes("deliver")) {
     return {
@@ -276,17 +319,6 @@ function mapTrack91Status(result: Track91Result): CourierStatusResult {
       details,
       rawStatus,
       trackingStatus: "Delivered"
-    };
-  }
-
-  if (statusText.includes("return") || statusText.includes("rto")) {
-    return {
-      courierDate,
-      deliveryDate: null,
-      deliveryStatus: "Returned",
-      details,
-      rawStatus,
-      trackingStatus: "Failed"
     };
   }
 

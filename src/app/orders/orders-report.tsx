@@ -201,6 +201,10 @@ function deliveryStatusForRow(row: ReportRow) {
   return row.deliveryStatus;
 }
 
+function deliveryStatusLabel(status: string) {
+  return status === "Returned" ? "Returned to Sender" : status;
+}
+
 function dateOnlyTime(value: string) {
   const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
 
@@ -312,7 +316,7 @@ function csvValueForColumn(
     "TRACKING ID": row.trackingId,
     "TXT STATUS": `Confirm: ${messageExportValue(row.confirmText)} / Tracking: ${messageExportValue(row.trackingText)} / Review: ${messageExportValue(row.reviewText)}`,
     "DELIVERY DATE": row.deliveryDate,
-    "DELIVERY STATUS": deliveryStatusForRow(row),
+    "DELIVERY STATUS": deliveryStatusLabel(deliveryStatusForRow(row)),
     DELAYED: isDelayedOrder(row, currentDate, deliveryDelayDays) ? "Yes" : "No",
     "REVIEW COMMENTS": row.reviewComments
   } satisfies Record<(typeof reportColumns)[number], string | number | null>;
@@ -438,6 +442,10 @@ function courierScanLabel(row: ReportRow) {
     return row.deliveryDate ? `Delivered ${formatOrderDate(row.deliveryDate)}` : "Delivered";
   }
 
+  if (deliveryStatusForRow(row) === "Returned") {
+    return row.deliveryDate ? `Returned ${formatOrderDate(row.deliveryDate)}` : "Returned to sender";
+  }
+
   if (!row.courierName) {
     return "Not shipped yet";
   }
@@ -448,6 +456,10 @@ function courierScanLabel(row: ReportRow) {
 function deliveryStatusMetaLabel(row: ReportRow) {
   if (deliveryStatusForRow(row) === "Delivered") {
     return row.deliveryDate ? `Delivered ${formatOrderDate(row.deliveryDate)}` : "";
+  }
+
+  if (deliveryStatusForRow(row) === "Returned") {
+    return row.deliveryDate ? `Returned ${formatOrderDate(row.deliveryDate)}` : "Returned to sender";
   }
 
   return trackingCheckLabel(row);
@@ -1377,7 +1389,7 @@ export function OrdersReport({
                         <div className="delivery-status-cell">
                           <div className="delivery-status-main">
                             <span className={`status-pill ${deliveryStatus.toLowerCase().replaceAll(" ", "-")}`}>
-                              {deliveryStatus}
+                              {deliveryStatusLabel(deliveryStatus)}
                             </span>
                             {trackingUrl ? (
                               <button
@@ -1466,7 +1478,7 @@ export function OrdersReport({
                       <small>{row.name || "No customer name"} · {cityStateLabel(row)}</small>
                     </div>
                     <span className={`status-pill ${deliveryStatus.toLowerCase().replaceAll(" ", "-")}`}>
-                      {deliveryStatus}
+                      {deliveryStatusLabel(deliveryStatus)}
                     </span>
                   </div>
                   {deliveryMeta ? <span className="status-meta">{deliveryMeta}</span> : null}
@@ -1584,7 +1596,7 @@ export function OrdersReport({
                 </div>
 
                 <div className="order-detail-status-row">
-                  <span className={`status-pill ${deliveryStatus.toLowerCase().replaceAll(" ", "-")}`}>{deliveryStatus}</span>
+                  <span className={`status-pill ${deliveryStatus.toLowerCase().replaceAll(" ", "-")}`}>{deliveryStatusLabel(deliveryStatus)}</span>
                   {delayed ? <span className="status-pill delayed">Delayed</span> : <span className="status-pill sent">On Track</span>}
                   <span className="txt-status-button">
                     {txtStatusSummary(inlineDraft.confirmText, inlineDraft.trackingText, inlineDraft.reviewText)}
@@ -1907,7 +1919,7 @@ export function OrdersReport({
                       </div>
                       <div>
                         <span>Delivery status</span>
-                        <strong>{previewDeliveryStatus}</strong>
+                        <strong>{deliveryStatusLabel(previewDeliveryStatus)}</strong>
                       </div>
                     </div>
                   </section>

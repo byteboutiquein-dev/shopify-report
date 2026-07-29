@@ -331,9 +331,13 @@ export async function checkOrderTrackingStatuses(
         const checkedAt = new Date().toISOString();
         const courierLookupText = getCourierLookupText(courierName, trackingId, row.tracking_url);
         const status = await fetchTrackCourierStatus(courierLookupText, trackingId);
+        const finalDeliveryDate =
+          status.deliveryStatus === "Delivered" || status.deliveryStatus === "Returned"
+            ? status.deliveryDate ?? row.delivery_date
+            : row.delivery_date;
         const payload = {
           courier_date: row.courier_date ?? status.courierDate,
-          delivery_date: status.deliveryStatus === "Delivered" ? status.deliveryDate ?? row.delivery_date : row.delivery_date,
+          delivery_date: finalDeliveryDate,
           delivery_status: status.deliveryStatus,
           tracking_checked_at: checkedAt,
           tracking_check_error: null,
