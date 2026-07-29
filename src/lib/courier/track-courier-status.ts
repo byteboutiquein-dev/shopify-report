@@ -3,6 +3,8 @@ import "server-only";
 import { createHash } from "node:crypto";
 
 import { fetchMySpeedPostStatus } from "@/lib/courier/myspeedpost-status";
+import { fetchSpeedPostTrackDtdcStatus } from "@/lib/courier/speedposttrack-status";
+import { fetchStCourierStatus } from "@/lib/courier/st-courier-status";
 import { fetchTrack91DtdcStatus, fetchTrack91Status } from "@/lib/courier/track91-status";
 import { getTrackCourierSlug, isIndiaPostTrackCourierSlug } from "@/lib/courier/tracking-links";
 
@@ -270,6 +272,25 @@ function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Unknown error";
 }
 
+async function tryCourierProviders(
+  providers: Array<{
+    fetchStatus: () => Promise<CourierStatusResult>;
+    name: string;
+  }>
+) {
+  const errors: string[] = [];
+
+  for (const provider of providers) {
+    try {
+      return await provider.fetchStatus();
+    } catch (error) {
+      errors.push(`${provider.name} failed: ${getErrorMessage(error)}`);
+    }
+  }
+
+  throw new Error(errors.join("; "));
+}
+
 export async function fetchTrackCourierStatus(courierName: string, trackingId: string): Promise<CourierStatusResult> {
   const slug = getTrackCourierSlug(courierName);
 
@@ -278,11 +299,37 @@ export async function fetchTrackCourierStatus(courierName: string, trackingId: s
   }
 
   if (slug === "dtdc") {
-    return fetchTrack91DtdcStatus(trackingId);
+    return tryCourierProviders([
+      {
+        fetchStatus: () => fetchTrack91DtdcStatus(trackingId),
+        name: "Track91"
+      },
+      {
+        fetchStatus: () => fetchSpeedPostTrackDtdcStatus(trackingId),
+        name: "SpeedPostTrack"
+      },
+      {
+        fetchStatus: () => fetchTrackCourierStatusFromTrackCourier(slug, trackingId),
+        name: "TrackCourier"
+      }
+    ]);
   }
 
   if (slug === "st-courier") {
-    return fetchTrack91Status("st-courier", trackingId);
+    return tryCourierProviders([
+      {
+        fetchStatus: () => fetchTrack91Status("st-courier", trackingId),
+        name: "Track91"
+      },
+      {
+        fetchStatus: () => fetchStCourierStatus(trackingId),
+        name: "ST Courier"
+      },
+      {
+        fetchStatus: () => fetchTrackCourierStatusFromTrackCourier(slug, trackingId),
+        name: "TrackCourier"
+      }
+    ]);
   }
 
   if (isIndiaPostTrackCourierSlug(slug)) {
