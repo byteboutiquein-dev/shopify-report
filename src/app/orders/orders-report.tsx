@@ -132,6 +132,7 @@ type TrackingPreviewResponse = {
     deliveryDate: string | null;
     deliveryStatus: string;
     rawStatus: string;
+    trackingProvider: string | null;
     trackingStatus: string;
   };
 };
@@ -471,6 +472,10 @@ function trackingCheckLabel(row: ReportRow) {
   }
 
   return row.trackingCheckedAt ? `Checked ${formatDateTime(row.trackingCheckedAt)}` : "Not checked yet";
+}
+
+function trackingProviderLabel(provider: string | null | undefined) {
+  return provider?.trim() || "";
 }
 
 function cityStateLabel(row: ReportRow) {
@@ -1498,6 +1503,7 @@ export function OrdersReport({
                     <div>
                       <span>Tracking check</span>
                       <strong>{trackingCheckLabel(row) || "No tracking yet"}</strong>
+                      {trackingProviderLabel(row.trackingProvider) ? <small>From {trackingProviderLabel(row.trackingProvider)}</small> : null}
                     </div>
                   </div>
                   {delayed ? <span className="status-pill delayed">Delayed</span> : null}
@@ -1653,6 +1659,7 @@ export function OrdersReport({
                     <div>
                       <span>Last checked</span>
                       <strong>{trackingCheckLabel(selectedRow) || "No tracking yet"}</strong>
+                      {trackingProviderLabel(selectedRow.trackingProvider) ? <small>From {trackingProviderLabel(selectedRow.trackingProvider)}</small> : null}
                     </div>
                   </div>
 
@@ -1809,6 +1816,7 @@ export function OrdersReport({
             const previewDeliveryStatus = liveStatus?.deliveryStatus ?? deliveryStatus;
             const previewTrackingStatus = liveStatus?.trackingStatus ?? trackingPreviewRow.trackingStatus;
             const previewRawStatus = liveDetails?.rawStatus ?? liveStatus?.rawStatus ?? previewDeliveryStatus;
+            const previewTrackingProvider = trackingProviderLabel(liveStatus?.trackingProvider ?? trackingPreviewRow.trackingProvider);
 
             return (
               <section className="tracking-preview-panel" aria-label={`Tracking preview for ${trackingPreviewRow.trackingId || "shipment"}`}>
@@ -1868,6 +1876,10 @@ export function OrdersReport({
                       <span>Last updated on tracking page</span>
                       <strong>{formatTrackingDateTime(liveDetails?.lastUpdatedAt ?? liveDetails?.lastEventAt)}</strong>
                     </div>
+                    <div>
+                      <span>Status fetched from</span>
+                      <strong>{previewTrackingProvider || "Tracking page"}</strong>
+                    </div>
                   </div>
 
                   <section className="tracking-preview-section">
@@ -1920,6 +1932,10 @@ export function OrdersReport({
                       <div>
                         <span>Delivery status</span>
                         <strong>{deliveryStatusLabel(previewDeliveryStatus)}</strong>
+                      </div>
+                      <div>
+                        <span>Tracking page used</span>
+                        <strong>{previewTrackingProvider || "-"}</strong>
                       </div>
                     </div>
                   </section>

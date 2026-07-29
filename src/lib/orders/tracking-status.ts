@@ -18,6 +18,7 @@ type TrackingStatusRow = {
   tracking_id: string | null;
   tracking_checked_at: string | null;
   tracking_check_error: string | null;
+  tracking_provider: string | null;
   tracking_status: string | null;
   tracking_url: string | null;
 };
@@ -113,7 +114,7 @@ async function fetchTrackingRowsPage(orderIds: string[], options: Required<Track
   let query = supabase
     .from("order_tracking")
     .select(
-      "order_id, courier_date, courier_name, delivery_date, delivery_status, tracking_id, tracking_checked_at, tracking_check_error, tracking_status, tracking_url"
+      "order_id, courier_date, courier_name, delivery_date, delivery_status, tracking_id, tracking_checked_at, tracking_check_error, tracking_provider, tracking_status, tracking_url"
     )
     .not("tracking_id", "is", null)
     .neq("tracking_id", "")
@@ -342,6 +343,7 @@ export async function checkOrderTrackingStatuses(
           tracking_checked_at: checkedAt,
           tracking_check_error: null,
           tracking_check_source: checkOptions.source,
+          tracking_provider: status.trackingProvider ?? null,
           tracking_status: status.trackingStatus,
           tracking_url: resolveTrackingUrl(courierLookupText, trackingId, row.tracking_url)
         };
@@ -349,6 +351,7 @@ export async function checkOrderTrackingStatuses(
           ["courier_date", row.courier_date, payload.courier_date],
           ["delivery_date", row.delivery_date, payload.delivery_date],
           ["delivery_status", row.delivery_status ?? "Pending", payload.delivery_status],
+          ["tracking_provider", row.tracking_provider, payload.tracking_provider],
           ["tracking_status", row.tracking_status ?? "Pending", payload.tracking_status],
           ["tracking_url", row.tracking_url, payload.tracking_url]
         ]

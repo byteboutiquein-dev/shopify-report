@@ -61,6 +61,7 @@ export type CourierStatusResult = {
   deliveryStatus: "Pending" | "In Transit" | "Delivered" | "Returned" | "Issue";
   details?: CourierTrackingDetails;
   rawStatus: string;
+  trackingProvider?: string;
   trackingStatus: "Pending" | "Sent" | "In Transit" | "Delivered" | "Failed";
 };
 
@@ -282,7 +283,11 @@ async function tryCourierProviders(
 
   for (const provider of providers) {
     try {
-      return await provider.fetchStatus();
+      const status = await provider.fetchStatus();
+      return {
+        ...status,
+        trackingProvider: provider.name
+      };
     } catch (error) {
       errors.push(`${provider.name} failed: ${getErrorMessage(error)}`);
     }
@@ -333,24 +338,21 @@ export async function fetchTrackCourierStatus(courierName: string, trackingId: s
   }
 
   if (isIndiaPostTrackCourierSlug(slug)) {
-    let mySpeedPostError: unknown;
-
-    try {
-      return await fetchMySpeedPostStatus(trackingId);
-    } catch (error) {
-      mySpeedPostError = error;
-    }
-
-    try {
-      return await fetchTrackCourierStatusFromTrackCourier(slug, trackingId);
-    } catch (trackCourierError) {
-      throw new Error(
-        `MySpeedPost failed: ${getErrorMessage(mySpeedPostError)}; TrackCourier failed: ${getErrorMessage(
-          trackCourierError
-        )}`
-      );
-    }
+    return tryCourierProviders([
+      {
+        fetchStatus: () => fetchMySpeedPostStatus(trackingId),
+        name: "MySpeedPost"
+      },
+      {
+        fetchStatus: () => fetchTrackCourierStatusFromTrackCourier(slug, trackingId),
+        name: "TrackCourier"
+      }
+    ]);
   }
 
-  return fetchTrackCourierStatusFromTrackCourier(slug, trackingId);
+  const status = await fetchTrackCourierStatusFromTrackCourier(slug, trackingId);
+  return {
+    ...status,
+    trackingProvider: "TrackCourier"
+  };
 }

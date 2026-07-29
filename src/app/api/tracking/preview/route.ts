@@ -90,6 +90,7 @@ export async function POST(request: Request) {
         deliveryDate: status.deliveryDate,
         deliveryStatus: status.deliveryStatus,
         rawStatus: status.rawStatus,
+        trackingProvider: status.trackingProvider ?? null,
         trackingStatus: status.trackingStatus
       }
     });

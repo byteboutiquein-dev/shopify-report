@@ -12,6 +12,7 @@ type OrderTrackingJoin = {
   tracking_checked_at: string | null;
   tracking_check_error: string | null;
   tracking_check_source: string | null;
+  tracking_provider: string | null;
   delivery_date: string | null;
   delivery_status: string | null;
 };
@@ -58,6 +59,7 @@ export type ReportRow = {
   trackingCheckedAt: string;
   trackingCheckError: string;
   trackingCheckSource: string;
+  trackingProvider: string;
   trackingText: string;
   deliveryDate: string;
   deliveryStatus: string;
@@ -161,6 +163,7 @@ function mapReportRows(
       trackingCheckedAt: tracking?.tracking_checked_at ?? "",
       trackingCheckError: tracking?.tracking_check_error ?? "",
       trackingCheckSource: tracking?.tracking_check_source ?? "",
+      trackingProvider: tracking?.tracking_provider ?? "",
       trackingText: communication?.tracking_txt_status ?? "Pending",
       deliveryDate: tracking?.delivery_date ?? "",
       deliveryStatus: tracking?.delivery_status ?? "Pending",
@@ -189,6 +192,7 @@ const reportSelect = `
     tracking_checked_at,
     tracking_check_error,
     tracking_check_source,
+    tracking_provider,
     delivery_date,
     delivery_status
   ),

@@ -1994,6 +1994,13 @@ th.sticky-col {
   overflow-wrap: anywhere;
 }
 
+.detail-grid small,
+.mobile-order-card-grid small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .drawer-actions,
 .message-check-grid {
   align-items: center;
@@ -2131,7 +2138,7 @@ th.sticky-col {
   align-items: stretch;
   display: grid;
   gap: 12px;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .tracking-live-status > div,

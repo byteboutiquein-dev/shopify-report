@@ -63,6 +63,7 @@ create table if not exists public.order_tracking (
   tracking_checked_at timestamptz,
   tracking_check_error text,
   tracking_check_source text not null default 'Manual',
+  tracking_provider text,
   delivery_date date,
   delivery_status text not null default 'Pending',
   created_at timestamptz not null default now(),
@@ -78,7 +79,8 @@ create table if not exists public.order_tracking (
 alter table public.order_tracking
 add column if not exists tracking_checked_at timestamptz,
 add column if not exists tracking_check_error text,
-add column if not exists tracking_check_source text not null default 'Manual';
+add column if not exists tracking_check_source text not null default 'Manual',
+add column if not exists tracking_provider text;
 
 do $$
 begin
@@ -231,6 +233,7 @@ create index if not exists order_tracking_delivery_status_idx on public.order_tr
 create index if not exists order_tracking_tracking_status_idx on public.order_tracking (tracking_status);
 create index if not exists order_tracking_checked_at_idx on public.order_tracking (tracking_checked_at desc);
 create index if not exists order_tracking_check_source_idx on public.order_tracking (tracking_check_source);
+create index if not exists order_tracking_provider_idx on public.order_tracking (tracking_provider);
 create index if not exists order_communication_confirm_status_idx on public.order_communication (confirm_txt_status);
 create index if not exists order_communication_tracking_status_idx on public.order_communication (tracking_txt_status);
 create index if not exists order_communication_review_status_idx on public.order_communication (review_txt_status);
@@ -331,6 +334,7 @@ comment on table public.order_tracking is 'Manual courier, tracking, and deliver
 comment on column public.order_tracking.tracking_checked_at is 'Last time the app checked the courier tracking page.';
 comment on column public.order_tracking.tracking_check_error is 'Last status-check error, if the courier tracking page could not be read.';
 comment on column public.order_tracking.tracking_check_source is 'Whether the last courier status check was run manually or by schedule.';
+comment on column public.order_tracking.tracking_provider is 'Tracking website/provider that returned the last successful courier status.';
 comment on table public.order_communication is 'Manual message status fields from the spreadsheet workflow.';
 comment on table public.order_comments is 'Review comments and internal operational notes.';
 comment on table public.sync_logs is 'History of manual, scheduled, or webhook sync attempts.';
