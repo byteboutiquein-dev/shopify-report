@@ -1357,6 +1357,7 @@ export function OrdersReport({
                   const delayed = isDelayedOrder(row, currentDate, deliveryDelayDays);
                   const rowIsChecking = checkingRowIds.has(row.id);
                   const trackingUrl = trackingUrlForRow(row);
+                  const trackingProvider = trackingProviderLabel(row.trackingProvider);
                   const deliveryMeta = deliveryStatusMetaLabel(row);
                   const inlineDraft = inlineDraftFor(row);
 
@@ -1406,6 +1407,7 @@ export function OrdersReport({
                             ) : null}
                           </div>
                           {deliveryMeta ? <span className="status-meta">{deliveryMeta}</span> : null}
+                          {trackingProvider ? <span className="status-meta status-provider">Updated from {trackingProvider}</span> : null}
                         </div>
                       </td>
                       <td>
@@ -1487,6 +1489,7 @@ export function OrdersReport({
               const rowIsChecking = checkingRowIds.has(row.id);
               const trackingUrl = trackingUrlForRow(row);
               const deliveryMeta = deliveryStatusMetaLabel(row);
+              const trackingProvider = trackingProviderLabel(row.trackingProvider);
               const inlineDraft = inlineDraftFor(row);
 
               return (
@@ -1518,7 +1521,7 @@ export function OrdersReport({
                     <div>
                       <span>Tracking check</span>
                       <strong>{trackingCheckLabel(row) || "No tracking yet"}</strong>
-                      {trackingProviderLabel(row.trackingProvider) ? <small>From {trackingProviderLabel(row.trackingProvider)}</small> : null}
+                      {trackingProvider ? <small>Updated from {trackingProvider}</small> : null}
                     </div>
                   </div>
                   {delayed ? <span className="status-pill delayed">Delayed</span> : null}
@@ -1954,6 +1957,26 @@ export function OrdersReport({
                       <strong>Last check failed</strong>
                       <p>{trackingPreviewRow.trackingCheckError}</p>
                     </div>
+                  ) : null}
+
+                  {livePreviewUrl ? (
+                    <section className="tracking-preview-section">
+                      <div className="tracking-page-embed-header">
+                        <h3>Tracking Page</h3>
+                        <span>{previewTrackingProvider ? `Loaded from ${previewTrackingProvider}` : "Live courier page"}</span>
+                      </div>
+                      <div className="tracking-page-frame-wrap">
+                        <iframe
+                          className="tracking-page-frame"
+                          referrerPolicy="no-referrer"
+                          src={livePreviewUrl}
+                          title={`Tracking page for ${trackingPreviewRow.trackingId || trackingPreviewRow.orderId}`}
+                        />
+                      </div>
+                      <p className="tracking-page-note">
+                        If the courier site blocks embedded preview, use Open Courier Page.
+                      </p>
+                    </section>
                   ) : null}
 
                   <div className="tracking-preview-footer">

@@ -1643,6 +1643,10 @@ th.sticky-col {
   line-height: 1.35;
 }
 
+.delivery-status-cell .status-provider {
+  color: var(--accent);
+}
+
 .tracking-preview-button {
   align-items: center;
   background: #f5f8f3;
@@ -2009,7 +2013,7 @@ th.sticky-col {
   overflow: auto;
   padding: 14px;
   position: relative;
-  width: min(780px, 96vw);
+  width: min(1120px, 96vw);
 }
 
 .tracking-preview-header {
@@ -2165,6 +2169,47 @@ th.sticky-col {
 
 .tracking-preview-error p {
   margin: 0;
+}
+
+.tracking-page-embed-header {
+  align-items: end;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.tracking-page-embed-header h3 {
+  margin: 0;
+}
+
+.tracking-page-embed-header span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.tracking-page-frame-wrap {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: inset 0 0 0 1px rgba(31, 38, 33, 0.03);
+  min-height: 620px;
+  overflow: hidden;
+}
+
+.tracking-page-frame {
+  border: 0;
+  display: block;
+  height: 620px;
+  width: 100%;
+}
+
+.tracking-page-note {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.45;
+  margin: -2px 0 0;
 }
 
 .tracking-timeline {
@@ -2639,6 +2684,19 @@ th.sticky-col {
 
   .tracking-preview-actions {
     justify-content: space-between;
+  }
+
+  .tracking-page-embed-header {
+    align-items: start;
+    display: grid;
+  }
+
+  .tracking-page-frame-wrap {
+    min-height: 500px;
+  }
+
+  .tracking-page-frame {
+    height: 500px;
   }
 
   .tracking-live-status,
