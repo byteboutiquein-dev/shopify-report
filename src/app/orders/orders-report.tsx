@@ -156,8 +156,8 @@ const orderTableColumns = [
   "COURIER",
   "TRACKING",
   "DELIVERY STATUS",
-  "REVIEW TXT",
   "DELAYED",
+  "REVIEW TXT",
   "DETAILS"
 ] as const;
 
@@ -1357,6 +1357,7 @@ export function OrdersReport({
                   const rowIsChecking = checkingRowIds.has(row.id);
                   const trackingUrl = trackingUrlForRow(row);
                   const deliveryMeta = deliveryStatusMetaLabel(row);
+                  const inlineDraft = inlineDraftFor(row);
 
                   return (
                     <tr key={row.id}>
@@ -1407,16 +1408,27 @@ export function OrdersReport({
                         </div>
                       </td>
                       <td>
-                        <span className={`status-pill ${isMessageSent(row.reviewText) ? "sent" : "pending"}`}>
-                          {reviewTxtLabel(row.reviewText)}
-                        </span>
-                      </td>
-                      <td>
                         {delayed ? (
                           <span className="status-pill delayed">Delayed</span>
                         ) : (
                           <span className="muted-text">No</span>
                         )}
+                      </td>
+                      <td>
+                        <label className="review-txt-checkbox">
+                          <input
+                            aria-label={`Review TXT for ${row.orderId}`}
+                            checked={isMessageSent(inlineDraft.reviewText)}
+                            disabled={savingRowIds.has(row.id)}
+                            type="checkbox"
+                            onChange={(event) => {
+                              const reviewText = event.target.checked ? "Sent" : "Pending";
+                              updateInlineDraft(row, "reviewText", reviewText);
+                              void saveInlineFields(row, { reviewText });
+                            }}
+                          />
+                          <span>{reviewTxtLabel(inlineDraft.reviewText)}</span>
+                        </label>
                       </td>
                       <td>
                         <div className="row-actions">
@@ -1474,6 +1486,7 @@ export function OrdersReport({
               const rowIsChecking = checkingRowIds.has(row.id);
               const trackingUrl = trackingUrlForRow(row);
               const deliveryMeta = deliveryStatusMetaLabel(row);
+              const inlineDraft = inlineDraftFor(row);
 
               return (
                 <article className="mobile-order-card" key={row.id}>
@@ -1506,12 +1519,22 @@ export function OrdersReport({
                       <strong>{trackingCheckLabel(row) || "No tracking yet"}</strong>
                       {trackingProviderLabel(row.trackingProvider) ? <small>From {trackingProviderLabel(row.trackingProvider)}</small> : null}
                     </div>
-                    <div>
-                      <span>Review TXT</span>
-                      <strong>{reviewTxtLabel(row.reviewText)}</strong>
-                    </div>
                   </div>
                   {delayed ? <span className="status-pill delayed">Delayed</span> : null}
+                  <label className="review-txt-checkbox mobile-review-txt-checkbox">
+                    <input
+                      aria-label={`Review TXT for ${row.orderId}`}
+                      checked={isMessageSent(inlineDraft.reviewText)}
+                      disabled={savingRowIds.has(row.id)}
+                      type="checkbox"
+                      onChange={(event) => {
+                        const reviewText = event.target.checked ? "Sent" : "Pending";
+                        updateInlineDraft(row, "reviewText", reviewText);
+                        void saveInlineFields(row, { reviewText });
+                      }}
+                    />
+                    <span>Review TXT {reviewTxtLabel(inlineDraft.reviewText)}</span>
+                  </label>
                   <div className="row-actions">
                     {trackingUrl ? (
                       <button className="mini-button" type="button" onClick={() => setTrackingPreviewOrderId(row.id)}>

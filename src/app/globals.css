@@ -2284,6 +2284,55 @@ th.sticky-col {
   color: var(--danger);
 }
 
+.review-txt-checkbox {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+  display: inline-flex;
+  gap: 8px;
+  min-height: 30px;
+  padding: 5px 10px;
+  white-space: nowrap;
+}
+
+.review-txt-checkbox:hover,
+.review-txt-checkbox:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(47, 111, 94, 0.1);
+}
+
+.review-txt-checkbox input {
+  accent-color: var(--accent);
+  cursor: pointer;
+  height: 15px;
+  width: 15px;
+}
+
+.review-txt-checkbox span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.review-txt-checkbox:has(input:checked) {
+  background: #e4f4ec;
+}
+
+.review-txt-checkbox:has(input:checked) span {
+  color: var(--accent-strong);
+}
+
+.review-txt-checkbox:has(input:disabled) {
+  cursor: progress;
+  opacity: 0.65;
+}
+
+.mobile-review-txt-checkbox {
+  margin-top: 8px;
+}
+
 .muted-text {
   color: var(--muted);
   font-size: 13px;
