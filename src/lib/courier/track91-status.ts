@@ -232,6 +232,21 @@ function isReturnToSenderResult(result: Track91Result) {
   );
 }
 
+function isDeliveredResult(result: Track91Result, rawStatus: string) {
+  const currentText = [
+    rawStatus,
+    result.event_raw,
+    result.event_code,
+    result.events?.[0]?.event,
+    result.events?.[0]?.event_code
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  return /\bdelivered\b/.test(currentText) && !currentText.includes("undelivered");
+}
+
 function locationLabel(location: Track91Result["origin"] | Track91Event["location"]) {
   if (!location) {
     return null;
@@ -297,21 +312,11 @@ function mapTrack91Status(result: Track91Result): CourierStatusResult {
   const statusText = `${rawStatus} ${result.event_code ?? ""}`.toLowerCase();
   const courierDate = getDateOnly(result.booked_at) ?? findEventDate(result.events, /booked|pickup|created/i);
   const returnToSender = isReturnToSenderResult(result);
-  const displayRawStatus = returnToSender && statusText.includes("deliver") ? "RTO" : rawStatus;
+  const delivered = isDeliveredResult(result, rawStatus);
+  const displayRawStatus = returnToSender && !delivered ? "RTO" : rawStatus;
   const details = mapTrack91Details(result, displayRawStatus);
 
-  if (returnToSender || statusText.includes("return") || statusText.includes("rto")) {
-    return {
-      courierDate,
-      deliveryDate: getDateOnly(result.delivered_at) ?? findEventDate(result.events, /deliver/i),
-      deliveryStatus: "Returned",
-      details,
-      rawStatus: displayRawStatus,
-      trackingStatus: "Failed"
-    };
-  }
-
-  if (statusText.includes("deliver")) {
+  if (delivered) {
     return {
       courierDate,
       deliveryDate: getDateOnly(result.delivered_at) ?? findEventDate(result.events, /deliver/i),
@@ -319,6 +324,17 @@ function mapTrack91Status(result: Track91Result): CourierStatusResult {
       details,
       rawStatus,
       trackingStatus: "Delivered"
+    };
+  }
+
+  if (returnToSender || statusText.includes("return") || statusText.includes("rto")) {
+    return {
+      courierDate,
+      deliveryDate: null,
+      deliveryStatus: "Returned",
+      details,
+      rawStatus: displayRawStatus,
+      trackingStatus: "Failed"
     };
   }
 
