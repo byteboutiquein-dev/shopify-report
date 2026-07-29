@@ -7,7 +7,7 @@ export const reportColumns = [
   "COURIER NAME",
   "COURIER CHARGE",
   "TRACKING ID",
-  "TXT STATUS",
+  "REVIEW TXT",
   "DELIVERY DATE",
   "DELIVERY STATUS",
   "DELAYED",

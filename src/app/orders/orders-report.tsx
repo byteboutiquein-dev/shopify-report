@@ -156,6 +156,7 @@ const orderTableColumns = [
   "COURIER",
   "TRACKING",
   "DELIVERY STATUS",
+  "REVIEW TXT",
   "DELAYED",
   "DETAILS"
 ] as const;
@@ -182,12 +183,12 @@ function isMessageSent(status: string) {
   return status === "Sent" || status === "Received";
 }
 
-function messageStatusFromChecked(checked: boolean) {
-  return checked ? "Sent" : "Pending";
-}
-
 function messageExportValue(status: string) {
   return isMessageSent(status) ? "Yes" : "No";
+}
+
+function reviewTxtLabel(status: string) {
+  return isMessageSent(status) ? "Sent" : "Pending";
 }
 
 function deliveryStatusForRow(row: ReportRow) {
@@ -258,11 +259,6 @@ function csvEscape(value: string | number | null) {
   return `"${text.replaceAll('"', '""')}"`;
 }
 
-function txtStatusSummary(confirmText: string, trackingText: string, reviewText: string) {
-  const sentCount = [confirmText, trackingText, reviewText].filter(isMessageSent).length;
-  return `${sentCount}/3 sent`;
-}
-
 function nextActionForRow(row: ReportRow, currentDate: string, deliveryDelayDays: number) {
   const deliveryStatus = deliveryStatusForRow(row);
 
@@ -315,7 +311,7 @@ function csvValueForColumn(
     "COURIER NAME": row.courierName,
     "COURIER CHARGE": row.courierCharge,
     "TRACKING ID": row.trackingId,
-    "TXT STATUS": `Confirm: ${messageExportValue(row.confirmText)} / Tracking: ${messageExportValue(row.trackingText)} / Review: ${messageExportValue(row.reviewText)}`,
+    "REVIEW TXT": messageExportValue(row.reviewText),
     "DELIVERY DATE": row.deliveryDate,
     "DELIVERY STATUS": deliveryStatusLabel(deliveryStatusForRow(row)),
     DELAYED: isDelayedOrder(row, currentDate, deliveryDelayDays) ? "Yes" : "No",
@@ -1411,6 +1407,11 @@ export function OrdersReport({
                         </div>
                       </td>
                       <td>
+                        <span className={`status-pill ${isMessageSent(row.reviewText) ? "sent" : "pending"}`}>
+                          {reviewTxtLabel(row.reviewText)}
+                        </span>
+                      </td>
+                      <td>
                         {delayed ? (
                           <span className="status-pill delayed">Delayed</span>
                         ) : (
@@ -1504,6 +1505,10 @@ export function OrdersReport({
                       <span>Tracking check</span>
                       <strong>{trackingCheckLabel(row) || "No tracking yet"}</strong>
                       {trackingProviderLabel(row.trackingProvider) ? <small>From {trackingProviderLabel(row.trackingProvider)}</small> : null}
+                    </div>
+                    <div>
+                      <span>Review TXT</span>
+                      <strong>{reviewTxtLabel(row.reviewText)}</strong>
                     </div>
                   </div>
                   {delayed ? <span className="status-pill delayed">Delayed</span> : null}
@@ -1604,9 +1609,6 @@ export function OrdersReport({
                 <div className="order-detail-status-row">
                   <span className={`status-pill ${deliveryStatus.toLowerCase().replaceAll(" ", "-")}`}>{deliveryStatusLabel(deliveryStatus)}</span>
                   {delayed ? <span className="status-pill delayed">Delayed</span> : <span className="status-pill sent">On Track</span>}
-                  <span className="txt-status-button">
-                    {txtStatusSummary(inlineDraft.confirmText, inlineDraft.trackingText, inlineDraft.reviewText)}
-                  </span>
                 </div>
 
                 {drawerNotice ? (
@@ -1716,51 +1718,6 @@ export function OrdersReport({
                         {rowIsChecking ? "Checking" : "Check Status"}
                       </button>
                     ) : null}
-                  </div>
-                </section>
-
-                <section className="detail-section">
-                  <h3>TXT Status</h3>
-                  <div className="message-check-grid">
-                    <label className="cell-checkbox">
-                      <input
-                        checked={isMessageSent(inlineDraft.confirmText)}
-                        disabled={rowIsSaving}
-                        type="checkbox"
-                        onChange={(event) => {
-                          const confirmText = messageStatusFromChecked(event.target.checked);
-                          updateInlineDraft(selectedRow, "confirmText", confirmText);
-                          void saveInlineFields(selectedRow, { confirmText });
-                        }}
-                      />
-                      <span>Confirm TXT</span>
-                    </label>
-                    <label className="cell-checkbox">
-                      <input
-                        checked={isMessageSent(inlineDraft.trackingText)}
-                        disabled={rowIsSaving}
-                        type="checkbox"
-                        onChange={(event) => {
-                          const trackingText = messageStatusFromChecked(event.target.checked);
-                          updateInlineDraft(selectedRow, "trackingText", trackingText);
-                          void saveInlineFields(selectedRow, { trackingText });
-                        }}
-                      />
-                      <span>Tracking TXT</span>
-                    </label>
-                    <label className="cell-checkbox">
-                      <input
-                        checked={isMessageSent(inlineDraft.reviewText)}
-                        disabled={rowIsSaving}
-                        type="checkbox"
-                        onChange={(event) => {
-                          const reviewText = messageStatusFromChecked(event.target.checked);
-                          updateInlineDraft(selectedRow, "reviewText", reviewText);
-                          void saveInlineFields(selectedRow, { reviewText });
-                        }}
-                      />
-                      <span>Review TXT</span>
-                    </label>
                   </div>
                 </section>
 
