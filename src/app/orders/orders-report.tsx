@@ -202,7 +202,7 @@ function deliveryStatusForRow(row: ReportRow) {
 }
 
 function deliveryStatusLabel(status: string) {
-  return status === "Returned" ? "Returned to Sender" : status;
+  return status === "Returned" ? "RTO" : status;
 }
 
 function dateOnlyTime(value: string) {
@@ -443,7 +443,7 @@ function courierScanLabel(row: ReportRow) {
   }
 
   if (deliveryStatusForRow(row) === "Returned") {
-    return row.deliveryDate ? `Returned ${formatOrderDate(row.deliveryDate)}` : "Returned to sender";
+    return row.deliveryDate ? `RTO ${formatOrderDate(row.deliveryDate)}` : "RTO";
   }
 
   if (!row.courierName) {
@@ -459,7 +459,7 @@ function deliveryStatusMetaLabel(row: ReportRow) {
   }
 
   if (deliveryStatusForRow(row) === "Returned") {
-    return row.deliveryDate ? `Returned ${formatOrderDate(row.deliveryDate)}` : "Returned to sender";
+    return row.deliveryDate ? `RTO ${formatOrderDate(row.deliveryDate)}` : "RTO";
   }
 
   return trackingCheckLabel(row);

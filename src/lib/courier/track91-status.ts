@@ -297,7 +297,7 @@ function mapTrack91Status(result: Track91Result): CourierStatusResult {
   const statusText = `${rawStatus} ${result.event_code ?? ""}`.toLowerCase();
   const courierDate = getDateOnly(result.booked_at) ?? findEventDate(result.events, /booked|pickup|created/i);
   const returnToSender = isReturnToSenderResult(result);
-  const displayRawStatus = returnToSender && statusText.includes("deliver") ? "Delivered to Sender" : rawStatus;
+  const displayRawStatus = returnToSender && statusText.includes("deliver") ? "RTO" : rawStatus;
   const details = mapTrack91Details(result, displayRawStatus);
 
   if (returnToSender || statusText.includes("return") || statusText.includes("rto")) {
