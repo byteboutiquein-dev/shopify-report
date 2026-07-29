@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
+import { Buffer } from "node:buffer";
 import { z } from "zod";
 
 import { fetchTrackCourierStatus } from "@/lib/courier/track-courier-status";
+import { getTrackCourierSlug, resolveTrackingUrl } from "@/lib/courier/tracking-links";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export const maxDuration = 60;
@@ -30,6 +32,58 @@ function getCourierLookupText(courierName: string, trackingId: string, trackingU
   }
 
   return [courierName, trackingUrl].filter(Boolean).join(" ");
+}
+
+function buildTrack91TrackingUrl(slug: "dtdc" | "st-courier", trackingId: string) {
+  return `https://track91.com/${slug}/track?n=${encodeURIComponent(trackingId)}`;
+}
+
+function buildSpeedPostTrackUrl(trackingId: string) {
+  const payload = Buffer.from(JSON.stringify({ c: "dtdc", t: trackingId })).toString("base64");
+  return `https://speedposttrack.io/tracking-result?d=${encodeURIComponent(payload)}`;
+}
+
+function buildTrackCourierIoUrl(courierName: string, trackingId: string) {
+  const slug = getTrackCourierSlug(courierName);
+
+  if (!slug) {
+    return null;
+  }
+
+  return `https://trackcourier.io/track-and-trace/${slug}/${encodeURIComponent(trackingId)}`;
+}
+
+function getProviderTrackingUrl(provider: string | null | undefined, courierName: string, trackingId: string, existingUrl: string | null) {
+  const normalizedProvider = provider?.trim().toLowerCase() ?? "";
+  const slug = getTrackCourierSlug(courierName);
+
+  if (normalizedProvider === "speedposttrack") {
+    return buildSpeedPostTrackUrl(trackingId);
+  }
+
+  if (normalizedProvider === "track91") {
+    if (slug === "st-courier") {
+      return buildTrack91TrackingUrl("st-courier", trackingId);
+    }
+
+    if (slug === "dtdc") {
+      return buildTrack91TrackingUrl("dtdc", trackingId);
+    }
+  }
+
+  if (normalizedProvider === "trackcourier") {
+    return buildTrackCourierIoUrl(courierName, trackingId) ?? resolveTrackingUrl(courierName, trackingId, existingUrl);
+  }
+
+  if (normalizedProvider === "myspeedpost") {
+    return `https://myspeedpost.com/s/${encodeURIComponent(trackingId)}`;
+  }
+
+  if (normalizedProvider === "st courier") {
+    return "https://stcourier.com/track/shipment";
+  }
+
+  return resolveTrackingUrl(courierName, trackingId, existingUrl);
 }
 
 export async function POST(request: Request) {
@@ -91,6 +145,7 @@ export async function POST(request: Request) {
         deliveryStatus: status.deliveryStatus,
         rawStatus: status.rawStatus,
         trackingProvider: status.trackingProvider ?? null,
+        trackingUrl: getProviderTrackingUrl(status.trackingProvider, courierName, trackingId, response.data.tracking_url),
         trackingStatus: status.trackingStatus
       }
     });

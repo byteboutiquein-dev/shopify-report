@@ -133,6 +133,7 @@ type TrackingPreviewResponse = {
     deliveryStatus: string;
     rawStatus: string;
     trackingProvider: string | null;
+    trackingUrl: string | null;
     trackingStatus: string;
   };
 };
@@ -1797,6 +1798,7 @@ export function OrdersReport({
             const previewTrackingStatus = liveStatus?.trackingStatus ?? trackingPreviewRow.trackingStatus;
             const previewRawStatus = liveDetails?.rawStatus ?? liveStatus?.rawStatus ?? previewDeliveryStatus;
             const previewTrackingProvider = trackingProviderLabel(liveStatus?.trackingProvider ?? trackingPreviewRow.trackingProvider);
+            const livePreviewUrl = liveStatus?.trackingUrl ?? previewUrl;
 
             return (
               <section className="tracking-preview-panel" aria-label={`Tracking preview for ${trackingPreviewRow.trackingId || "shipment"}`}>
@@ -1809,8 +1811,8 @@ export function OrdersReport({
                     </p>
                   </div>
                   <div className="tracking-preview-actions">
-                    {previewUrl ? (
-                      <a className="mini-button" href={previewUrl} rel="noreferrer" target="_blank">
+                    {livePreviewUrl ? (
+                      <a className="mini-button" href={livePreviewUrl} rel="noreferrer" target="_blank">
                         <ExternalLink aria-hidden="true" size={14} />
                         Open
                       </a>
@@ -1947,7 +1949,7 @@ export function OrdersReport({
                     </div>
                   ) : null}
 
-                  {trackingPreviewRow.trackingCheckError && !trackingPreviewError ? (
+                  {trackingPreviewRow.trackingCheckError && !trackingPreviewError && !liveStatus ? (
                     <div className="tracking-preview-error">
                       <strong>Last check failed</strong>
                       <p>{trackingPreviewRow.trackingCheckError}</p>
@@ -1971,8 +1973,8 @@ export function OrdersReport({
                         {rowIsChecking || trackingPreviewLoading ? "Refreshing" : "Refresh Status"}
                       </button>
                     ) : null}
-                    {previewUrl ? (
-                      <a className="button secondary" href={previewUrl} rel="noreferrer" target="_blank">
+                    {livePreviewUrl ? (
+                      <a className="button secondary" href={livePreviewUrl} rel="noreferrer" target="_blank">
                         <ExternalLink aria-hidden="true" size={18} />
                         Open Courier Page
                       </a>
