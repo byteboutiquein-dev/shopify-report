@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { fetchTrackCourierStatus } from "@/lib/courier/track-courier-status";
 import { getTrackCourierSlug, resolveTrackingUrl } from "@/lib/courier/tracking-links";
+import { getOrderReportRow } from "@/lib/orders/report";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export const maxDuration = 60;
@@ -13,7 +14,10 @@ const requestSchema = z.object({
 });
 
 type TrackingPreviewRow = {
+  courier_date: string | null;
   courier_name: string | null;
+  delivery_date: string | null;
+  delivery_status: string | null;
   tracking_id: string | null;
   tracking_url: string | null;
 };
@@ -103,7 +107,7 @@ export async function POST(request: Request) {
   const supabase = createServerSupabaseClient();
   const response = await supabase
     .from("order_tracking")
-    .select("courier_name, tracking_id, tracking_url")
+    .select("courier_date, courier_name, delivery_date, delivery_status, tracking_id, tracking_url")
     .eq("order_id", payload.data.orderId)
     .single<TrackingPreviewRow>();
 
@@ -135,6 +139,32 @@ export async function POST(request: Request) {
       getCourierLookupText(courierName, trackingId, response.data.tracking_url),
       trackingId
     );
+    const checkedAt = new Date().toISOString();
+    const trackingUrl = getProviderTrackingUrl(status.trackingProvider, courierName, trackingId, response.data.tracking_url);
+    const finalDeliveryDate =
+      status.deliveryStatus === "Delivered" || status.deliveryStatus === "Returned"
+        ? status.deliveryDate ?? response.data.delivery_date
+        : response.data.delivery_date;
+    const updateResponse = await supabase
+      .from("order_tracking")
+      .update({
+        courier_date: response.data.courier_date ?? status.courierDate,
+        delivery_date: finalDeliveryDate,
+        delivery_status: status.deliveryStatus,
+        tracking_checked_at: checkedAt,
+        tracking_check_error: null,
+        tracking_check_source: "Manual",
+        tracking_provider: status.trackingProvider ?? null,
+        tracking_status: status.trackingStatus,
+        tracking_url: trackingUrl
+      })
+      .eq("order_id", payload.data.orderId);
+
+    if (updateResponse.error) {
+      throw new Error(updateResponse.error.message);
+    }
+
+    const updatedRow = await getOrderReportRow(payload.data.orderId);
 
     return NextResponse.json({
       ok: true,
@@ -145,9 +175,10 @@ export async function POST(request: Request) {
         deliveryStatus: status.deliveryStatus,
         rawStatus: status.rawStatus,
         trackingProvider: status.trackingProvider ?? null,
-        trackingUrl: getProviderTrackingUrl(status.trackingProvider, courierName, trackingId, response.data.tracking_url),
+        trackingUrl,
         trackingStatus: status.trackingStatus
-      }
+      },
+      updatedRow
     });
   } catch (error) {
     return NextResponse.json(

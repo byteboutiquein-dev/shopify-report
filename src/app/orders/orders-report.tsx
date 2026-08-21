@@ -136,6 +136,7 @@ type TrackingPreviewResponse = {
     trackingUrl: string | null;
     trackingStatus: string;
   };
+  updatedRow?: ReportRow;
 };
 
 const sortOptions: Array<{ value: SortKey; label: string }> = [
@@ -649,6 +650,10 @@ export function OrdersReport({
 
         if (!response.ok || !data.ok) {
           throw new Error(data.message ?? "Could not load tracking page details.");
+        }
+
+        if (data.updatedRow) {
+          setRows((current) => current.map((row) => (row.id === data.updatedRow?.id ? data.updatedRow : row)));
         }
 
         setTrackingPreviewData({ orderId: previewOrderId, response: data });
