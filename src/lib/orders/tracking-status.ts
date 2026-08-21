@@ -6,6 +6,8 @@ import { getOrderReportRow, type ReportRow } from "@/lib/orders/report";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 const TRACKING_PAGE_SIZE = 500;
+const SCHEDULED_TRACKING_DELAY_MS = 10_000;
+const SCHEDULED_TRACKING_MAX_ORDERS = 20;
 
 export type TrackingCheckSource = "Manual" | "Scheduled";
 
@@ -30,6 +32,8 @@ type OrderNameRow = {
 
 type TrackingStatusCheckOptions = {
   includeDelivered?: boolean;
+  maxOrders?: number;
+  perOrderDelayMs?: number;
   source?: TrackingCheckSource;
 };
 
@@ -69,10 +73,15 @@ export type TrackingStatusCheckResult = {
   failed: number;
   failures: TrackingStatusFailure[];
   logId: string | null;
+  queued: number;
   rows: ReportRow[];
   skipped: number;
   updated: number;
 };
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 function valueChanged(oldValue: unknown, newValue: unknown) {
   return String(oldValue ?? "") !== String(newValue ?? "");
@@ -117,9 +126,15 @@ async function fetchTrackingRowsPage(orderIds: string[], options: Required<Track
       "order_id, courier_date, courier_name, delivery_date, delivery_status, tracking_id, tracking_checked_at, tracking_check_error, tracking_provider, tracking_status, tracking_url"
     )
     .not("tracking_id", "is", null)
-    .neq("tracking_id", "")
-    .order("updated_at", { ascending: false })
-    .range(from, to);
+    .neq("tracking_id", "");
+
+  if (!orderIds.length && options.source === "Scheduled") {
+    query = query.order("tracking_checked_at", { ascending: true, nullsFirst: true }).order("updated_at", { ascending: true });
+  } else {
+    query = query.order("updated_at", { ascending: false });
+  }
+
+  query = query.range(from, to);
 
   if (orderIds.length) {
     query = query.in("order_id", orderIds);
@@ -296,6 +311,12 @@ export async function checkOrderTrackingStatuses(
   const uniqueOrderIds = [...new Set(orderIds.filter(Boolean))];
   const checkOptions = {
     includeDelivered: options.includeDelivered ?? Boolean(uniqueOrderIds.length),
+    maxOrders:
+      options.maxOrders ??
+      (options.source === "Scheduled" && !uniqueOrderIds.length ? SCHEDULED_TRACKING_MAX_ORDERS : Number.MAX_SAFE_INTEGER),
+    perOrderDelayMs:
+      options.perOrderDelayMs ??
+      (options.source === "Scheduled" && !uniqueOrderIds.length ? SCHEDULED_TRACKING_DELAY_MS : 0),
     source: options.source ?? "Manual"
   } satisfies Required<TrackingStatusCheckOptions>;
   const logId = await createTrackingCheckLog(checkOptions.source);
@@ -307,10 +328,13 @@ export async function checkOrderTrackingStatuses(
   let skipped = 0;
 
   try {
-    const trackingRows = await loadTrackingRows(uniqueOrderIds, checkOptions);
+    const allTrackingRows = await loadTrackingRows(uniqueOrderIds, checkOptions);
+    const trackingRows = allTrackingRows.slice(0, checkOptions.maxOrders);
+    const queued = Math.max(0, allTrackingRows.length - trackingRows.length);
     const orderNames = await loadOrderNames(trackingRows.map((row) => row.order_id));
 
-    for (const row of trackingRows) {
+    for (let rowIndex = 0; rowIndex < trackingRows.length; rowIndex += 1) {
+      const row = trackingRows[rowIndex];
       const courierName = row.courier_name?.trim();
       const trackingId = row.tracking_id?.trim();
       const orderName = orderNames.get(row.order_id);
@@ -422,6 +446,10 @@ export async function checkOrderTrackingStatuses(
           reason
         });
       }
+
+      if (checkOptions.perOrderDelayMs > 0 && rowIndex < trackingRows.length - 1) {
+        await sleep(checkOptions.perOrderDelayMs);
+      }
     }
 
     const totalSkipped = skipped + Math.max(0, uniqueOrderIds.length - trackingRows.length);
@@ -442,6 +470,7 @@ export async function checkOrderTrackingStatuses(
       failed: failures.length,
       failures,
       logId,
+      queued,
       rows,
       skipped: totalSkipped,
       updated

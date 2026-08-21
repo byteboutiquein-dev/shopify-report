@@ -86,6 +86,7 @@ type TrackingStatusCheckResponse = {
   failed?: number;
   failures?: Array<{ orderId: string; reason: string }>;
   message?: string;
+  queued?: number;
   rows?: ReportRow[];
   skipped?: number;
   updated?: number;
@@ -1044,10 +1045,11 @@ export function OrdersReport({
             .join(" | ")}${data.failures.length > 3 ? " ..." : ""}`
         : "";
       const skippedText = data.skipped ? ` ${data.skipped} skipped.` : "";
+      const queuedText = data.queued ? ` ${data.queued} queued for next scheduled run.` : "";
       const targetText = options.bulk ? "all pending courier rows" : targetRows[0]?.orderId ?? "order";
       const nextNotice = {
         type: data.failed ? "warning" : "success",
-        message: `Checked ${targetText}. Checked ${data.checked ?? 0}. Updated ${data.updated ?? 0}.${failedText}${skippedText}${failureDetails}`
+        message: `Checked ${targetText}. Checked ${data.checked ?? 0}. Updated ${data.updated ?? 0}.${failedText}${skippedText}${queuedText}${failureDetails}`
       } as const;
       if (singleRow) {
         showRowNotice(singleRow.id, nextNotice);

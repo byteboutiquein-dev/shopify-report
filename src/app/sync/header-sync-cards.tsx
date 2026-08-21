@@ -22,6 +22,7 @@ type CourierSyncResponse = {
   failed?: number;
   message?: string;
   ok: boolean;
+  queued?: number;
   skipped?: number;
   updated?: number;
 };
@@ -109,7 +110,7 @@ export function HeaderSyncCards({
 
       setMessage({
         type: data.failed ? "warning" : "success",
-        text: `Courier checked ${data.checked ?? 0}, updated ${data.updated ?? 0}, skipped ${data.skipped ?? 0}, failed ${data.failed ?? 0}.`
+        text: `Courier checked ${data.checked ?? 0}, updated ${data.updated ?? 0}, skipped ${data.skipped ?? 0}, failed ${data.failed ?? 0}, queued ${data.queued ?? 0}.`
       });
       setTrackingStatus(`Manual · ${data.failed ? "Partial" : "Success"}`);
       setTrackingTime(formatDateTime(new Date()));

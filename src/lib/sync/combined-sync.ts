@@ -25,6 +25,7 @@ function summarizeCourierSync(result: TrackingStatusCheckResult): CourierSyncSum
     failed: result.failed,
     failures: result.failures,
     logId: result.logId,
+    queued: result.queued,
     skipped: result.skipped,
     updated: result.updated
   };
@@ -64,7 +65,7 @@ export async function runCombinedSync(input: CombinedSyncInput = {}): Promise<Co
 
   const status = combinedStatus(orderSync, courierSync, courierSyncError);
   const courierText = courierSync
-    ? `Courier checked ${courierSync.checked}, updated ${courierSync.updated}, failed ${courierSync.failed}.`
+    ? `Courier checked ${courierSync.checked}, updated ${courierSync.updated}, failed ${courierSync.failed}, queued ${courierSync.queued}.`
     : `Courier sync failed: ${courierSyncError}`;
 
   return {
