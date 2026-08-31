@@ -71,7 +71,6 @@ function mapMySpeedPostStatus(
   eventDates: string[]
 ): CourierStatusResult {
   const normalized = rawStatus.toLowerCase();
-  const delivered = /\bdelivered\b/.test(normalized) && !/\bundelivered\b/.test(normalized);
   const courierDate =
     parseMySpeedPostDate(bookedOn) ??
     eventDates
@@ -79,7 +78,7 @@ function mapMySpeedPostStatus(
       .filter((eventDate): eventDate is string => Boolean(eventDate))
       .sort()[0] ?? null;
 
-  if (deliveredAt || delivered) {
+  if (deliveredAt || normalized.includes("delivered")) {
     return {
       courierDate,
       deliveryDate: parseMySpeedPostDate(deliveredAt ?? lastUpdatedAt),

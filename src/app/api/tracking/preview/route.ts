@@ -19,7 +19,6 @@ type TrackingPreviewRow = {
   delivery_date: string | null;
   delivery_status: string | null;
   tracking_id: string | null;
-  tracking_status: string | null;
   tracking_url: string | null;
 };
 
@@ -91,10 +90,6 @@ function getProviderTrackingUrl(provider: string | null | undefined, courierName
   return resolveTrackingUrl(courierName, trackingId, existingUrl);
 }
 
-function keepDeliveredStatus(row: Pick<TrackingPreviewRow, "delivery_status" | "tracking_status">) {
-  return row.delivery_status === "Delivered" || row.tracking_status === "Delivered";
-}
-
 export async function POST(request: Request) {
   const payload = requestSchema.safeParse(await request.json().catch(() => ({})));
 
@@ -112,7 +107,7 @@ export async function POST(request: Request) {
   const supabase = createServerSupabaseClient();
   const response = await supabase
     .from("order_tracking")
-    .select("courier_date, courier_name, delivery_date, delivery_status, tracking_id, tracking_status, tracking_url")
+    .select("courier_date, courier_name, delivery_date, delivery_status, tracking_id, tracking_url")
     .eq("order_id", payload.data.orderId)
     .single<TrackingPreviewRow>();
 
@@ -146,11 +141,8 @@ export async function POST(request: Request) {
     );
     const checkedAt = new Date().toISOString();
     const trackingUrl = getProviderTrackingUrl(status.trackingProvider, courierName, trackingId, response.data.tracking_url);
-    const preserveDelivered = keepDeliveredStatus(response.data) && status.deliveryStatus !== "Delivered";
-    const newDeliveryStatus = preserveDelivered ? "Delivered" : status.deliveryStatus;
-    const newTrackingStatus = preserveDelivered ? "Delivered" : status.trackingStatus;
     const finalDeliveryDate =
-      newDeliveryStatus === "Delivered" || newDeliveryStatus === "Returned"
+      status.deliveryStatus === "Delivered" || status.deliveryStatus === "Returned"
         ? status.deliveryDate ?? response.data.delivery_date
         : response.data.delivery_date;
     const updateResponse = await supabase
@@ -158,12 +150,12 @@ export async function POST(request: Request) {
       .update({
         courier_date: response.data.courier_date ?? status.courierDate,
         delivery_date: finalDeliveryDate,
-        delivery_status: newDeliveryStatus,
+        delivery_status: status.deliveryStatus,
         tracking_checked_at: checkedAt,
         tracking_check_error: null,
         tracking_check_source: "Manual",
         tracking_provider: status.trackingProvider ?? null,
-        tracking_status: newTrackingStatus,
+        tracking_status: status.trackingStatus,
         tracking_url: trackingUrl
       })
       .eq("order_id", payload.data.orderId);
@@ -179,12 +171,12 @@ export async function POST(request: Request) {
       details: status.details ?? null,
       status: {
         courierDate: status.courierDate,
-        deliveryDate: finalDeliveryDate,
-        deliveryStatus: newDeliveryStatus,
+        deliveryDate: status.deliveryDate,
+        deliveryStatus: status.deliveryStatus,
         rawStatus: status.rawStatus,
         trackingProvider: status.trackingProvider ?? null,
         trackingUrl,
-        trackingStatus: newTrackingStatus
+        trackingStatus: status.trackingStatus
       },
       updatedRow
     });

@@ -357,12 +357,8 @@ function parseSpeedPostTrackDate(value: string | null | undefined) {
   return `${year}-${month}-${day}`;
 }
 
-function isPositiveDeliveredText(value: string) {
-  return /\bdelivered\b/i.test(value) && !/\bundelivered\b/i.test(value);
-}
-
-function findDeliveredEventDate(events: SpeedPostTrackEvent[]) {
-  const matched = events.find((event) => isPositiveDeliveredText([event.event, event.status].filter(Boolean).join(" ")));
+function findEventDate(events: SpeedPostTrackEvent[], pattern: RegExp) {
+  const matched = events.find((event) => pattern.test([event.event, event.status].filter(Boolean).join(" ")));
 
   if (!matched) {
     return null;
@@ -389,12 +385,12 @@ function mapSpeedPostTrackStatus(response: SpeedPostTrackResponse): CourierStatu
   const rawStatus = data.overall_status || data.del_status || events[0]?.event || events[0]?.status || "Pending";
   const normalized = [data.overall_state, data.overall_status, data.del_status, rawStatus].filter(Boolean).join(" ").toLowerCase();
   const courierDate = findCourierDate(bookingDetails, events);
-  const deliveryDate = parseSpeedPostTrackDate(bookingDetails?.delivery_confirmed_on) ?? findDeliveredEventDate(events);
 
-  if (deliveryDate || isPositiveDeliveredText(normalized)) {
+  if (normalized.includes("delivered")) {
     return {
       courierDate,
-      deliveryDate,
+      deliveryDate:
+        parseSpeedPostTrackDate(bookingDetails?.delivery_confirmed_on) ?? findEventDate(events, /delivered/i),
       deliveryStatus: "Delivered",
       rawStatus,
       trackingStatus: "Delivered"
