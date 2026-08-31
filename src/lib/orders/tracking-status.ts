@@ -87,6 +87,10 @@ function valueChanged(oldValue: unknown, newValue: unknown) {
   return String(oldValue ?? "") !== String(newValue ?? "");
 }
 
+function keepDeliveredStatus(row: Pick<TrackingStatusRow, "delivery_status" | "tracking_status">) {
+  return row.delivery_status === "Delivered" || row.tracking_status === "Delivered";
+}
+
 function auditRow(entityId: string, fieldName: string, oldValue: unknown, newValue: unknown) {
   return {
     changed_by: "Courier Status Check",
@@ -129,7 +133,10 @@ async function fetchTrackingRowsPage(orderIds: string[], options: Required<Track
     .neq("tracking_id", "");
 
   if (!orderIds.length && options.source === "Scheduled") {
-    query = query.order("tracking_checked_at", { ascending: true, nullsFirst: true }).order("updated_at", { ascending: true });
+    query = query
+      .order("courier_date", { ascending: true, nullsFirst: false })
+      .order("tracking_checked_at", { ascending: true, nullsFirst: true })
+      .order("updated_at", { ascending: true });
   } else {
     query = query.order("updated_at", { ascending: false });
   }
@@ -356,19 +363,22 @@ export async function checkOrderTrackingStatuses(
         const checkedAt = new Date().toISOString();
         const courierLookupText = getCourierLookupText(courierName, trackingId, row.tracking_url);
         const status = await fetchTrackCourierStatus(courierLookupText, trackingId);
+        const preserveDelivered = keepDeliveredStatus(row) && status.deliveryStatus !== "Delivered";
+        const newDeliveryStatus = preserveDelivered ? "Delivered" : status.deliveryStatus;
+        const newTrackingStatus = preserveDelivered ? "Delivered" : status.trackingStatus;
         const finalDeliveryDate =
-          status.deliveryStatus === "Delivered" || status.deliveryStatus === "Returned"
+          newDeliveryStatus === "Delivered" || newDeliveryStatus === "Returned"
             ? status.deliveryDate ?? row.delivery_date
             : row.delivery_date;
         const payload = {
           courier_date: row.courier_date ?? status.courierDate,
           delivery_date: finalDeliveryDate,
-          delivery_status: status.deliveryStatus,
+          delivery_status: newDeliveryStatus,
           tracking_checked_at: checkedAt,
           tracking_check_error: null,
           tracking_check_source: checkOptions.source,
           tracking_provider: status.trackingProvider ?? null,
-          tracking_status: status.trackingStatus,
+          tracking_status: newTrackingStatus,
           tracking_url: resolveTrackingUrl(courierLookupText, trackingId, row.tracking_url)
         };
         const auditRows = [

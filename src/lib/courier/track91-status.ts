@@ -203,21 +203,24 @@ function findEventDate(events: Track91Event[] | null | undefined, pattern: RegEx
   return getDateOnly(event?.tracked_at);
 }
 
+function trackingEventText(event: Track91Event | null | undefined) {
+  return [event?.event_code, event?.event, event?.remarks].filter(Boolean).join(" ");
+}
+
 function currentReadableStatusText(result: Track91Result, rawStatus: string) {
   return [
     rawStatus,
     result.event_raw,
     result.delivery_summary?.raw_status,
-    result.events?.[0]?.event,
-    result.events?.[0]?.remarks
+    trackingEventText(result.events?.[0])
   ]
     .filter(Boolean)
     .join(" ")
     .toLowerCase();
 }
 
-function isDeliveredStatus(currentText: string) {
-  return /\bdelivered\b/.test(currentText) && !currentText.includes("undelivered");
+function isPositiveDeliveredStatus(currentText: string) {
+  return /\bdelivered\b/.test(currentText) && !/\bundelivered\b/.test(currentText);
 }
 
 function isReturnToSenderStatus(currentText: string) {
@@ -229,6 +232,11 @@ function isReturnToSenderStatus(currentText: string) {
     currentText.includes("returning to sender") ||
     currentText.includes("delivered to sender")
   );
+}
+
+function findDeliveredEventDate(events: Track91Event[] | null | undefined) {
+  const event = events?.find((item) => isPositiveDeliveredStatus(trackingEventText(item).toLowerCase()));
+  return getDateOnly(event?.tracked_at);
 }
 
 function locationLabel(location: Track91Result["origin"] | Track91Event["location"]) {
@@ -296,15 +304,16 @@ function mapTrack91Status(result: Track91Result): CourierStatusResult {
   const statusText = `${rawStatus} ${result.event_code ?? ""}`.toLowerCase();
   const readableStatusText = currentReadableStatusText(result, rawStatus);
   const courierDate = getDateOnly(result.booked_at) ?? findEventDate(result.events, /booked|pickup|created/i);
+  const deliveredEventDate = findDeliveredEventDate(result.events);
   const returnToSender = isReturnToSenderStatus(readableStatusText);
-  const delivered = isDeliveredStatus(readableStatusText);
+  const delivered = Boolean(result.delivered_at) || Boolean(deliveredEventDate) || isPositiveDeliveredStatus(readableStatusText);
   const displayRawStatus = returnToSender && !delivered ? "RTO" : rawStatus;
   const details = mapTrack91Details(result, displayRawStatus);
 
   if (delivered) {
     return {
       courierDate,
-      deliveryDate: getDateOnly(result.delivered_at) ?? findEventDate(result.events, /deliver/i),
+      deliveryDate: getDateOnly(result.delivered_at) ?? deliveredEventDate,
       deliveryStatus: "Delivered",
       details,
       rawStatus,

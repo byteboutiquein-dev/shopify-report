@@ -177,7 +177,10 @@ function parseTrackCourierDate(value: string | undefined) {
 }
 
 function findDeliveredDate(data: TrackCourierResponse) {
-  const deliveredCheckpoint = data.Checkpoints?.find((checkpoint) => checkpoint.CheckpointState === "delivered");
+  const deliveredCheckpoint = data.Checkpoints?.find((checkpoint) => {
+    const checkpointText = `${checkpoint.CheckpointState ?? ""}`.toLowerCase();
+    return /\bdelivered\b/.test(checkpointText) && !/\bundelivered\b/.test(checkpointText);
+  });
   return parseTrackCourierDate(deliveredCheckpoint?.Date ?? data.Checkpoints?.[0]?.Date);
 }
 
@@ -194,11 +197,14 @@ function mapCourierStatus(data: TrackCourierResponse): CourierStatusResult {
   const state = data.ShipmentState?.toLowerCase() ?? "pending";
   const rawStatus = data.MostRecentStatus || data.AdditionalInfo || state || "Pending";
   const courierDate = findCourierDate(data);
+  const deliveredDate = findDeliveredDate(data);
+  const deliveredStatusText = `${state} ${rawStatus}`.toLowerCase();
+  const hasDeliveredStatus = /\bdelivered\b/.test(deliveredStatusText) && !/\bundelivered\b/.test(deliveredStatusText);
 
-  if (state === "delivered" || /delivered/i.test(rawStatus)) {
+  if (state === "delivered" || deliveredDate || hasDeliveredStatus) {
     return {
       courierDate,
-      deliveryDate: findDeliveredDate(data),
+      deliveryDate: deliveredDate,
       deliveryStatus: "Delivered",
       rawStatus,
       trackingStatus: "Delivered"
