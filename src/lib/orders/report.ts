@@ -93,6 +93,7 @@ export type OrdersReportPageInput = {
 };
 
 export type OrdersReportSummary = {
+  checkFailed: number;
   delayed: number;
   delivered: number;
   inTransit: number;
@@ -114,6 +115,7 @@ export type OrdersReportSummaryInput = {
 };
 
 const emptyReportSummary: OrdersReportSummary = {
+  checkFailed: 0,
   delayed: 0,
   delivered: 0,
   inTransit: 0,
@@ -238,6 +240,10 @@ function isMessageSent(status: string) {
 }
 
 function deliveryStatusForReportRow(row: ReportRow) {
+  if (row.trackingId.trim() && row.trackingCheckError && row.deliveryStatus !== "Delivered" && row.deliveryStatus !== "Returned") {
+    return "Check Failed";
+  }
+
   if (!row.trackingId.trim() && row.deliveryStatus === "Pending") {
     return "Not Shipped";
   }
@@ -274,6 +280,7 @@ function isDelayedReportRow(row: ReportRow, currentDate: string, deliveryDelayDa
   return Boolean(
     row.courierDate &&
       deliveryStatusForReportRow(row) !== "Delivered" &&
+      deliveryStatusForReportRow(row) !== "Check Failed" &&
       daysBetweenDates(row.courierDate, currentDate) >= deliveryDelayDays
   );
 }
@@ -363,6 +370,10 @@ function summarizeReportRows(rows: ReportRow[], input: OrdersReportSummaryInput)
 
       if (deliveryStatus === "Not Shipped") {
         summary.notShipped += 1;
+      }
+
+      if (deliveryStatus === "Check Failed") {
+        summary.checkFailed += 1;
       }
 
       if (deliveryStatus === "In Transit" || deliveryStatus === "Tracking Added") {

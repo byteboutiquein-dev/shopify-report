@@ -31,12 +31,17 @@ function summarizeCourierSync(result: TrackingStatusCheckResult): CourierSyncSum
   };
 }
 
-function combinedStatus(orderSync: SyncResult, courierSync: CourierSyncSummary | null, courierSyncError: string | null) {
+function combinedStatus(
+  orderSync: SyncResult,
+  courierSync: CourierSyncSummary | null,
+  courierSyncError: string | null,
+  syncType: "Manual" | "Scheduled"
+) {
   if (orderSync.status === "Failed" && courierSyncError) {
     return "Failed" as const;
   }
 
-  if (orderSync.status === "Failed" || courierSyncError || (courierSync?.failed ?? 0) > 0) {
+  if (orderSync.status === "Failed" || courierSyncError || (syncType === "Manual" && (courierSync?.failed ?? 0) > 0)) {
     return "Partial" as const;
   }
 
@@ -63,9 +68,11 @@ export async function runCombinedSync(input: CombinedSyncInput = {}): Promise<Co
     courierSyncError = error instanceof Error ? error.message : "Could not sync courier tracking statuses.";
   }
 
-  const status = combinedStatus(orderSync, courierSync, courierSyncError);
+  const status = combinedStatus(orderSync, courierSync, courierSyncError, syncType);
   const courierText = courierSync
-    ? `Courier checked ${courierSync.checked}, updated ${courierSync.updated}, failed ${courierSync.failed}, queued ${courierSync.queued}.`
+    ? syncType === "Scheduled"
+      ? `Courier checked ${courierSync.checked}, updated ${courierSync.updated}, provider blocked ${courierSync.failed}, queued ${courierSync.queued}.`
+      : `Courier checked ${courierSync.checked}, updated ${courierSync.updated}, failed ${courierSync.failed}, queued ${courierSync.queued}.`
     : `Courier sync failed: ${courierSyncError}`;
 
   return {

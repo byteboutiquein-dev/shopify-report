@@ -479,7 +479,7 @@ textarea:disabled {
 .ops-summary {
   display: grid;
   gap: 12px;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   margin-bottom: 16px;
 }
 
@@ -2323,6 +2323,7 @@ th.sticky-col {
 }
 
 .status-pill.failed,
+.status-pill.check-failed,
 .status-pill.returned,
 .status-pill.issue {
   background: #fff0ed;

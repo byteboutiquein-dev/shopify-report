@@ -23,9 +23,19 @@ export async function POST(request: Request) {
     );
   }
 
+  if (!payload.data.orderIds.length) {
+    return NextResponse.json(
+      {
+        ok: false,
+        message: "Manual bulk courier status check is disabled. Use the automatic courier cron or check one order from the table."
+      },
+      { status: 400 }
+    );
+  }
+
   try {
     const result = await checkOrderTrackingStatuses(payload.data.orderIds, {
-      includeDelivered: Boolean(payload.data.orderIds.length),
+      includeDelivered: true,
       source: "Manual"
     });
 

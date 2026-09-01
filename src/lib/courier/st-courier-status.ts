@@ -127,8 +127,9 @@ function parseStCourierDate(value: string | null) {
 
 function mapStCourierStatus(rawStatus: string, courierDate: string | null, deliveryDate: string | null): CourierStatusResult {
   const normalized = rawStatus.toLowerCase();
+  const delivered = /\bdelivered\b/.test(normalized) && !/\bundelivered\b/.test(normalized);
 
-  if (normalized.includes("delivered")) {
+  if (deliveryDate || delivered) {
     return {
       courierDate,
       deliveryDate,

@@ -195,6 +195,10 @@ function reviewTxtLabel(status: string) {
 }
 
 function deliveryStatusForRow(row: ReportRow) {
+  if (row.trackingId.trim() && row.trackingCheckError && row.deliveryStatus !== "Delivered" && row.deliveryStatus !== "Returned") {
+    return "Check Failed";
+  }
+
   if (!row.trackingId.trim() && row.deliveryStatus === "Pending") {
     return "Not Shipped";
   }
@@ -235,6 +239,7 @@ function isDelayedOrder(row: ReportRow, currentDate: string, deliveryDelayDays: 
   return Boolean(
     row.courierDate &&
       deliveryStatusForRow(row) !== "Delivered" &&
+      deliveryStatusForRow(row) !== "Check Failed" &&
       daysBetweenDates(row.courierDate, currentDate) >= deliveryDelayDays
   );
 }
@@ -264,6 +269,13 @@ function csvEscape(value: string | number | null) {
 
 function nextActionForRow(row: ReportRow, currentDate: string, deliveryDelayDays: number) {
   const deliveryStatus = deliveryStatusForRow(row);
+
+  if (deliveryStatus === "Check Failed") {
+    return {
+      title: "Retry tracking check",
+      detail: "The courier page was blocked, timed out, or returned no usable status."
+    };
+  }
 
   if (deliveryStatus === "Not Shipped") {
     return {
@@ -454,6 +466,10 @@ function courierScanLabel(row: ReportRow) {
 }
 
 function deliveryStatusMetaLabel(row: ReportRow) {
+  if (deliveryStatusForRow(row) === "Check Failed") {
+    return row.trackingCheckedAt ? `Failed ${formatDateTime(row.trackingCheckedAt)}` : "Courier check failed";
+  }
+
   if (deliveryStatusForRow(row) === "Delivered") {
     return row.deliveryDate ? `Delivered ${formatOrderDate(row.deliveryDate)}` : "";
   }
@@ -569,6 +585,7 @@ export function OrdersReport({
         setDuplicateTrackingEntries(data.duplicateTrackingEntries ?? []);
         setTotalRows(data.totalRows ?? data.rows.length);
         setRangeSummary(data.summary ?? {
+          checkFailed: 0,
           delayed: 0,
           delivered: 0,
           inTransit: 0,
@@ -1004,19 +1021,13 @@ export function OrdersReport({
     }
   }
 
-  async function checkDeliveryStatusesForRows(targetRows: ReportRow[], options: { bulk: boolean }) {
-    const targetRow = targetRows[0];
-    const singleRow = !options.bulk && targetRow ? targetRow : null;
-    if (singleRow) {
-      showRowNotice(singleRow.id, null);
-    } else {
-      setNotice(null);
-    }
+  async function checkDeliveryStatusForRow(row: ReportRow) {
+    showRowNotice(row.id, null);
 
     try {
       const response = await fetch("/api/tracking/check-status", {
         body: JSON.stringify({
-          orderIds: options.bulk ? [] : targetRows.map((row) => row.id)
+          orderIds: [row.id]
         }),
         headers: {
           "Content-Type": "application/json"
@@ -1046,26 +1057,17 @@ export function OrdersReport({
         : "";
       const skippedText = data.skipped ? ` ${data.skipped} skipped.` : "";
       const queuedText = data.queued ? ` ${data.queued} queued for next scheduled run.` : "";
-      const targetText = options.bulk ? "all pending courier rows" : targetRows[0]?.orderId ?? "order";
       const nextNotice = {
         type: data.failed ? "warning" : "success",
-        message: `Checked ${targetText}. Checked ${data.checked ?? 0}. Updated ${data.updated ?? 0}.${failedText}${skippedText}${queuedText}${failureDetails}`
+        message: `Checked ${row.orderId}. Checked ${data.checked ?? 0}. Updated ${data.updated ?? 0}.${failedText}${skippedText}${queuedText}${failureDetails}`
       } as const;
-      if (singleRow) {
-        showRowNotice(singleRow.id, nextNotice);
-      } else {
-        setNotice(nextNotice);
-      }
+      showRowNotice(row.id, nextNotice);
     } catch (error) {
       const nextNotice = {
         type: "error",
         message: error instanceof Error ? error.message : "Could not check delivery statuses."
       } as const;
-      if (singleRow) {
-        showRowNotice(singleRow.id, nextNotice);
-      } else {
-        setNotice(nextNotice);
-      }
+      showRowNotice(row.id, nextNotice);
       throw error;
     }
   }
@@ -1084,7 +1086,7 @@ export function OrdersReport({
     setRowChecking(row.id, true);
 
     try {
-      await checkDeliveryStatusesForRows([row], { bulk: false });
+      await checkDeliveryStatusForRow(row);
     } catch {
       // The shared checker already shows the specific error notice.
     } finally {
@@ -1151,6 +1153,15 @@ export function OrdersReport({
           <span>In Transit</span>
           <strong>{rangeSummary.inTransit}</strong>
           <small>Tracking added or moving</small>
+        </button>
+        <button
+          className={`ops-card warning ${filters.deliveryStatus === "Check Failed" ? "active" : ""}`}
+          type="button"
+          onClick={() => showDeliveryStatus("Check Failed")}
+        >
+          <span>Check Failed</span>
+          <strong>{rangeSummary.checkFailed}</strong>
+          <small>Blocked, timeout, or not found</small>
         </button>
         <button
           className={`ops-card ${filters.deliveryStatus === "Delivered" ? "active" : ""}`}

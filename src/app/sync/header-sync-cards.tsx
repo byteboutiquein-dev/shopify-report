@@ -17,16 +17,6 @@ type OrderSyncResponse = {
   ok?: boolean;
 };
 
-type CourierSyncResponse = {
-  checked?: number;
-  failed?: number;
-  message?: string;
-  ok: boolean;
-  queued?: number;
-  skipped?: number;
-  updated?: number;
-};
-
 type ActiveInfo = "orders" | "courier" | null;
 
 function formatDateTime(value: Date) {
@@ -50,12 +40,11 @@ export function HeaderSyncCards({
   latestTrackingTime
 }: HeaderSyncCardsProps) {
   const [activeInfo, setActiveInfo] = useState<ActiveInfo>(null);
-  const [isCourierSyncing, setIsCourierSyncing] = useState(false);
   const [isOrderSyncing, setIsOrderSyncing] = useState(false);
   const [orderStatus, setOrderStatus] = useState(latestOrderStatus);
   const [orderTime, setOrderTime] = useState(latestOrderTime);
-  const [trackingStatus, setTrackingStatus] = useState(latestTrackingStatus);
-  const [trackingTime, setTrackingTime] = useState(latestTrackingTime);
+  const [trackingStatus] = useState(latestTrackingStatus);
+  const [trackingTime] = useState(latestTrackingTime);
   const [message, setMessage] = useState<{ type: "success" | "warning" | "error"; text: string } | null>(null);
 
   async function syncOrders() {
@@ -90,41 +79,6 @@ export function HeaderSyncCards({
     }
   }
 
-  async function syncCourierStatus() {
-    setIsCourierSyncing(true);
-    setMessage(null);
-
-    try {
-      const response = await fetch("/api/tracking/check-status", {
-        body: JSON.stringify({ orderIds: [] }),
-        headers: {
-          "Content-Type": "application/json"
-        },
-        method: "POST"
-      });
-      const data = (await response.json()) as CourierSyncResponse;
-
-      if (!response.ok || !data.ok) {
-        throw new Error(data.message ?? "Could not sync courier status.");
-      }
-
-      setMessage({
-        type: data.failed ? "warning" : "success",
-        text: `Courier checked ${data.checked ?? 0}, updated ${data.updated ?? 0}, skipped ${data.skipped ?? 0}, failed ${data.failed ?? 0}, queued ${data.queued ?? 0}.`
-      });
-      setTrackingStatus(`Manual · ${data.failed ? "Partial" : "Success"}`);
-      setTrackingTime(formatDateTime(new Date()));
-      refreshReport();
-    } catch (error) {
-      setMessage({
-        type: "error",
-        text: error instanceof Error ? error.message : "Could not sync courier status."
-      });
-    } finally {
-      setIsCourierSyncing(false);
-    }
-  }
-
   return (
     <div className="header-status-wrap">
       <div className="header-status-grid" aria-label="Sync status">
@@ -151,7 +105,7 @@ export function HeaderSyncCards({
           <button
             aria-busy={isOrderSyncing}
             className="header-status-action"
-            disabled={!isReady || isOrderSyncing || isCourierSyncing}
+            disabled={!isReady || isOrderSyncing}
             type="button"
             onClick={syncOrders}
           >
@@ -177,19 +131,9 @@ export function HeaderSyncCards({
           <small>{trackingStatus}</small>
           {activeInfo === "courier" ? (
             <p className="header-sync-info">
-              Checks courier tracking pages for orders that have a tracking ID and are not delivered. Delivered orders are skipped.
+              Automatic cron checks courier pages in small batches. For manual work, use the Check button on a single order row.
             </p>
           ) : null}
-          <button
-            aria-busy={isCourierSyncing}
-            className="header-status-action"
-            disabled={!isReady || isOrderSyncing || isCourierSyncing}
-            type="button"
-            onClick={syncCourierStatus}
-          >
-            <RefreshCw aria-hidden="true" className={isCourierSyncing ? "spin" : ""} size={15} />
-            {isCourierSyncing ? "Checking" : "Sync Courier"}
-          </button>
         </article>
       </div>
 

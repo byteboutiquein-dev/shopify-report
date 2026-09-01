@@ -7,7 +7,8 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 const TRACKING_PAGE_SIZE = 500;
 const SCHEDULED_TRACKING_DELAY_MS = 10_000;
-const SCHEDULED_TRACKING_MAX_ORDERS = 20;
+const SCHEDULED_TRACKING_MAX_ORDERS = 10;
+const SCHEDULED_TRACKING_MIN_RECHECK_HOURS = 12;
 
 export type TrackingCheckSource = "Manual" | "Scheduled";
 
@@ -35,6 +36,7 @@ type TrackingStatusCheckOptions = {
   maxOrders?: number;
   perOrderDelayMs?: number;
   source?: TrackingCheckSource;
+  tolerateFailures?: boolean;
 };
 
 type TrackingCheckLogItemStatus = "Fetched" | "Updated" | "Skipped" | "Failed";
@@ -87,6 +89,34 @@ function valueChanged(oldValue: unknown, newValue: unknown) {
   return String(oldValue ?? "") !== String(newValue ?? "");
 }
 
+function keepDeliveredStatus(row: Pick<TrackingStatusRow, "delivery_status" | "tracking_status">) {
+  return row.delivery_status === "Delivered" || row.tracking_status === "Delivered";
+}
+
+function compareNullableText(left: string | null, right: string | null, nullsFirst = true) {
+  if (!left && !right) return 0;
+  if (!left) return nullsFirst ? -1 : 1;
+  if (!right) return nullsFirst ? 1 : -1;
+  return left.localeCompare(right, undefined, { numeric: true, sensitivity: "base" });
+}
+
+function compareScheduledTrackingRows(left: TrackingStatusRow, right: TrackingStatusRow) {
+  const leftCheckFailed = left.tracking_check_error ? 0 : 1;
+  const rightCheckFailed = right.tracking_check_error ? 0 : 1;
+
+  return (
+    leftCheckFailed - rightCheckFailed ||
+    compareNullableText(left.courier_date, right.courier_date, false) ||
+    compareNullableText(left.tracking_checked_at, right.tracking_checked_at) ||
+    compareNullableText(left.order_id, right.order_id)
+  );
+}
+
+function scheduledRecheckCutoffIso() {
+  const cutoff = new Date(Date.now() - SCHEDULED_TRACKING_MIN_RECHECK_HOURS * 60 * 60 * 1000);
+  return cutoff.toISOString().replace(/\.\d{3}Z$/, "Z");
+}
+
 function auditRow(entityId: string, fieldName: string, oldValue: unknown, newValue: unknown) {
   return {
     changed_by: "Courier Status Check",
@@ -129,7 +159,11 @@ async function fetchTrackingRowsPage(orderIds: string[], options: Required<Track
     .neq("tracking_id", "");
 
   if (!orderIds.length && options.source === "Scheduled") {
-    query = query.order("tracking_checked_at", { ascending: true, nullsFirst: true }).order("updated_at", { ascending: true });
+    query = query
+      .or(`tracking_checked_at.is.null,tracking_checked_at.lt.${scheduledRecheckCutoffIso()}`)
+      .order("courier_date", { ascending: true, nullsFirst: false })
+      .order("tracking_checked_at", { ascending: true, nullsFirst: true })
+      .order("updated_at", { ascending: true });
   } else {
     query = query.order("updated_at", { ascending: false });
   }
@@ -139,7 +173,7 @@ async function fetchTrackingRowsPage(orderIds: string[], options: Required<Track
   if (orderIds.length) {
     query = query.in("order_id", orderIds);
   } else if (!options.includeDelivered) {
-    query = query.neq("delivery_status", "Delivered");
+    query = query.neq("delivery_status", "Delivered").neq("tracking_status", "Delivered");
   }
 
   const response = await query.returns<TrackingStatusRow[]>();
@@ -163,7 +197,7 @@ async function loadTrackingRows(orderIds: string[], options: Required<TrackingSt
     rows.push(...page);
 
     if (page.length < TRACKING_PAGE_SIZE) {
-      return rows;
+      return options.source === "Scheduled" ? rows.sort(compareScheduledTrackingRows) : rows;
     }
   }
 }
@@ -317,7 +351,8 @@ export async function checkOrderTrackingStatuses(
     perOrderDelayMs:
       options.perOrderDelayMs ??
       (options.source === "Scheduled" && !uniqueOrderIds.length ? SCHEDULED_TRACKING_DELAY_MS : 0),
-    source: options.source ?? "Manual"
+    source: options.source ?? "Manual",
+    tolerateFailures: options.tolerateFailures ?? options.source === "Scheduled"
   } satisfies Required<TrackingStatusCheckOptions>;
   const logId = await createTrackingCheckLog(checkOptions.source);
   const failures: TrackingStatusFailure[] = [];
@@ -356,19 +391,22 @@ export async function checkOrderTrackingStatuses(
         const checkedAt = new Date().toISOString();
         const courierLookupText = getCourierLookupText(courierName, trackingId, row.tracking_url);
         const status = await fetchTrackCourierStatus(courierLookupText, trackingId);
+        const preserveDelivered = keepDeliveredStatus(row) && status.deliveryStatus !== "Delivered";
+        const newDeliveryStatus = preserveDelivered ? "Delivered" : status.deliveryStatus;
+        const newTrackingStatus = preserveDelivered ? "Delivered" : status.trackingStatus;
         const finalDeliveryDate =
-          status.deliveryStatus === "Delivered" || status.deliveryStatus === "Returned"
+          newDeliveryStatus === "Delivered" || newDeliveryStatus === "Returned"
             ? status.deliveryDate ?? row.delivery_date
             : row.delivery_date;
         const payload = {
           courier_date: row.courier_date ?? status.courierDate,
           delivery_date: finalDeliveryDate,
-          delivery_status: status.deliveryStatus,
+          delivery_status: newDeliveryStatus,
           tracking_checked_at: checkedAt,
           tracking_check_error: null,
           tracking_check_source: checkOptions.source,
           tracking_provider: status.trackingProvider ?? null,
-          tracking_status: status.trackingStatus,
+          tracking_status: newTrackingStatus,
           tracking_url: resolveTrackingUrl(courierLookupText, trackingId, row.tracking_url)
         };
         const auditRows = [
@@ -459,7 +497,7 @@ export async function checkOrderTrackingStatuses(
       checked,
       failed: failures.length,
       skipped: totalSkipped,
-      status: failures.length ? "Partial" : "Success",
+      status: failures.length && !checkOptions.tolerateFailures ? "Partial" : "Success",
       updated
     });
 
