@@ -71,7 +71,7 @@ create table if not exists public.order_tracking (
   constraint order_tracking_order_unique unique (order_id),
   constraint order_tracking_status_check check (tracking_status in ('Pending', 'Sent', 'In Transit', 'Delivered', 'Failed')),
   constraint order_tracking_check_source_check check (tracking_check_source in ('Manual', 'Scheduled')),
-  constraint order_delivery_status_check check (delivery_status in ('Pending', 'In Transit', 'Delivered', 'Returned', 'Issue')),
+  constraint order_delivery_status_check check (delivery_status in ('Pending', 'In Transit', 'Check Failed', 'Delivered', 'Returned', 'Issue')),
   constraint order_tracking_charge_nonnegative check (courier_charge is null or courier_charge >= 0)
 );
 
@@ -94,6 +94,13 @@ begin
     check (tracking_check_source in ('Manual', 'Scheduled'));
   end if;
 end $$;
+
+alter table public.order_tracking
+drop constraint if exists order_delivery_status_check;
+
+alter table public.order_tracking
+add constraint order_delivery_status_check
+check (delivery_status in ('Pending', 'In Transit', 'Check Failed', 'Delivered', 'Returned', 'Issue'));
 
 create table if not exists public.order_communication (
   id uuid primary key default gen_random_uuid(),

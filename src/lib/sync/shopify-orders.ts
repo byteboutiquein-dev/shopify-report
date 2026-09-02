@@ -48,7 +48,12 @@ type SyncBaselineRecord = {
 type TrackingRecord = {
   courier_charge: number | null;
   courier_name: string | null;
+  delivery_date: string | null;
+  delivery_status: string | null;
   order_id: string;
+  tracking_check_error: string | null;
+  tracking_checked_at: string | null;
+  tracking_provider: string | null;
   tracking_id: string | null;
   tracking_status: string | null;
   tracking_url: string | null;
@@ -106,6 +111,10 @@ function getShopifyTrackingFields(order: ShopifyOrderNode): ShopifyTrackingField
     trackingId: tracking?.number?.trim() || null,
     trackingUrl: resolveTrackingUrl(tracking?.company, tracking?.number, tracking?.url)
   };
+}
+
+function normalizeTrackingId(value: string | null | undefined) {
+  return value?.trim().toUpperCase() ?? "";
 }
 
 function toOrderDate(value: string) {
@@ -380,7 +389,9 @@ async function refreshTrackingFromShopifyOrders(shopId: string, shopifyOrders: S
   for (const orderIds of chunkValues([...trackingByOrderId.keys()], 50)) {
     const existingTracking = await supabase
       .from("order_tracking")
-      .select("order_id, courier_charge, courier_name, tracking_id, tracking_status, tracking_url")
+      .select(
+        "order_id, courier_charge, courier_name, delivery_date, delivery_status, tracking_check_error, tracking_checked_at, tracking_provider, tracking_id, tracking_status, tracking_url"
+      )
       .in("order_id", orderIds)
       .returns<TrackingRecord[]>();
 
@@ -440,10 +451,21 @@ async function refreshTrackingFromShopifyOrders(shopId: string, shopifyOrders: S
       }
 
       const payload: Partial<Record<keyof TrackingRecord, string | number | null>> = {};
+      const currentTrackingId = normalizeTrackingId(row.tracking_id);
+      const shopifyTrackingId = normalizeTrackingId(tracking.trackingId);
+      const trackingIdChanged = Boolean(shopifyTrackingId) && currentTrackingId !== shopifyTrackingId;
 
-      if (!row.tracking_id?.trim() && tracking.trackingId) {
+      if (trackingIdChanged && tracking.trackingId) {
         payload.tracking_id = tracking.trackingId;
         payload.tracking_status = "Sent";
+        payload.tracking_checked_at = null;
+        payload.tracking_check_error = null;
+        payload.tracking_provider = null;
+
+        if (row.delivery_status !== "Delivered") {
+          payload.delivery_date = null;
+          payload.delivery_status = "Pending";
+        }
       }
 
       if (tracking.trackingUrl && row.tracking_url !== tracking.trackingUrl) {

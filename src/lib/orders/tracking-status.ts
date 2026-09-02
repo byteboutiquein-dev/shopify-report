@@ -8,7 +8,9 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 const TRACKING_PAGE_SIZE = 500;
 const SCHEDULED_TRACKING_DELAY_MS = 10_000;
 const SCHEDULED_TRACKING_MAX_ORDERS = 10;
+const SCHEDULED_TRACKING_LOOKBACK_DAYS = 30;
 const SCHEDULED_TRACKING_MIN_RECHECK_HOURS = 12;
+const SCHEDULED_TRACKING_ACTIVE_RUN_MINUTES = 14;
 
 export type TrackingCheckSource = "Manual" | "Scheduled";
 
@@ -29,6 +31,11 @@ type TrackingStatusRow = {
 type OrderNameRow = {
   id: string;
   order_name: string;
+};
+
+type ActiveTrackingCheckLogRow = {
+  id: string;
+  started_at: string;
 };
 
 type TrackingStatusCheckOptions = {
@@ -117,6 +124,16 @@ function scheduledRecheckCutoffIso() {
   return cutoff.toISOString().replace(/\.\d{3}Z$/, "Z");
 }
 
+function scheduledOrderDateCutoff() {
+  const cutoff = new Date(Date.now() - SCHEDULED_TRACKING_LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
+  return cutoff.toISOString().slice(0, 10);
+}
+
+function scheduledActiveRunCutoffIso() {
+  const cutoff = new Date(Date.now() - SCHEDULED_TRACKING_ACTIVE_RUN_MINUTES * 60 * 1000);
+  return cutoff.toISOString().replace(/\.\d{3}Z$/, "Z");
+}
+
 function auditRow(entityId: string, fieldName: string, oldValue: unknown, newValue: unknown) {
   return {
     changed_by: "Courier Status Check",
@@ -153,7 +170,7 @@ async function fetchTrackingRowsPage(orderIds: string[], options: Required<Track
   let query = supabase
     .from("order_tracking")
     .select(
-      "order_id, courier_date, courier_name, delivery_date, delivery_status, tracking_id, tracking_checked_at, tracking_check_error, tracking_provider, tracking_status, tracking_url"
+      "order_id, courier_date, courier_name, delivery_date, delivery_status, tracking_id, tracking_checked_at, tracking_check_error, tracking_provider, tracking_status, tracking_url, orders!inner(order_date)"
     )
     .not("tracking_id", "is", null)
     .neq("tracking_id", "");
@@ -161,6 +178,7 @@ async function fetchTrackingRowsPage(orderIds: string[], options: Required<Track
   if (!orderIds.length && options.source === "Scheduled") {
     query = query
       .or(`tracking_checked_at.is.null,tracking_checked_at.lt.${scheduledRecheckCutoffIso()}`)
+      .gte("orders.order_date", scheduledOrderDateCutoff())
       .order("courier_date", { ascending: true, nullsFirst: false })
       .order("tracking_checked_at", { ascending: true, nullsFirst: true })
       .order("updated_at", { ascending: true });
@@ -240,6 +258,26 @@ async function createTrackingCheckLog(source: TrackingCheckSource) {
   }
 
   return response.data.id;
+}
+
+async function getActiveScheduledTrackingLog() {
+  const supabase = createServerSupabaseClient();
+  const response = await supabase
+    .from("tracking_check_logs")
+    .select("id, started_at")
+    .eq("check_source", "Scheduled")
+    .is("finished_at", null)
+    .gte("started_at", scheduledActiveRunCutoffIso())
+    .order("started_at", { ascending: false })
+    .limit(1)
+    .maybeSingle<ActiveTrackingCheckLogRow>();
+
+  if (response.error) {
+    console.warn("Courier tracking active-run check skipped:", response.error.message);
+    return null;
+  }
+
+  return response.data ?? null;
 }
 
 async function finishTrackingCheckLog(
@@ -354,6 +392,25 @@ export async function checkOrderTrackingStatuses(
     source: options.source ?? "Manual",
     tolerateFailures: options.tolerateFailures ?? options.source === "Scheduled"
   } satisfies Required<TrackingStatusCheckOptions>;
+
+  if (checkOptions.source === "Scheduled" && !uniqueOrderIds.length) {
+    const activeLog = await getActiveScheduledTrackingLog();
+
+    if (activeLog) {
+      console.log("Scheduled courier status sync skipped because another run is active", activeLog);
+      return {
+        checked: 0,
+        failed: 0,
+        failures: [],
+        logId: activeLog.id,
+        queued: 0,
+        rows: [],
+        skipped: 0,
+        updated: 0
+      };
+    }
+  }
+
   const logId = await createTrackingCheckLog(checkOptions.source);
   const failures: TrackingStatusFailure[] = [];
   const refreshedOrderIds = new Set<string>();
@@ -457,14 +514,33 @@ export async function checkOrderTrackingStatuses(
       } catch (error) {
         const checkedAt = new Date().toISOString();
         const reason = error instanceof Error ? error.message : "Could not check tracking status.";
-        const failureUpdate = await supabase
+        const shouldPreserveDelivered = keepDeliveredStatus(row);
+        const failurePayload = {
+          tracking_checked_at: checkedAt,
+          tracking_check_error: reason,
+          tracking_check_source: checkOptions.source,
+          ...(shouldPreserveDelivered
+            ? {}
+            : {
+                delivery_status: "Check Failed",
+                tracking_status: "Failed"
+              })
+        };
+        let failureUpdate = await supabase
           .from("order_tracking")
-          .update({
-            tracking_checked_at: checkedAt,
-            tracking_check_error: reason,
-            tracking_check_source: checkOptions.source
-          })
+          .update(failurePayload)
           .eq("order_id", row.order_id);
+
+        if (failureUpdate.error && /constraint|order_delivery_status_check/i.test(failureUpdate.error.message)) {
+          failureUpdate = await supabase
+            .from("order_tracking")
+            .update({
+              tracking_checked_at: checkedAt,
+              tracking_check_error: reason,
+              tracking_check_source: checkOptions.source
+            })
+            .eq("order_id", row.order_id);
+        }
 
         if (!failureUpdate.error) {
           refreshedOrderIds.add(row.order_id);
@@ -474,7 +550,9 @@ export async function checkOrderTrackingStatuses(
           logItems.push(
             createTrackingLogItem(logId, row, orderName, "Failed", {
               checkedAt,
-              errorMessage: reason
+              errorMessage: reason,
+              newDeliveryStatus: shouldPreserveDelivered ? "Delivered" : "Check Failed",
+              newTrackingStatus: shouldPreserveDelivered ? "Delivered" : "Failed"
             })
           );
         }

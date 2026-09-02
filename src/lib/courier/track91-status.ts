@@ -5,6 +5,7 @@ import type { CourierStatusResult, CourierTrackingDetails } from "@/lib/courier/
 const TRACK91_ORIGIN = "https://track91.com";
 const TRACK91_LIVEWIRE_UPDATE_URL = `${TRACK91_ORIGIN}/livewire-83ab8104/update`;
 const COURIER_FETCH_TIMEOUT_MS = 20_000;
+const TRACK91_NOT_FOUND_RETRY_DELAY_MS = 8_000;
 
 type Track91LivewireResponse = {
   components?: Array<{
@@ -110,10 +111,25 @@ function browserHeaders(extraHeaders: HeadersInit = {}) {
   return {
     Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "Accept-Language": "en-GB,en-US;q=0.9,en;q=0.8",
+    "Cache-Control": "no-cache",
+    Pragma: "no-cache",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
+    "Sec-Fetch-User": "?1",
+    "Upgrade-Insecure-Requests": "1",
     "User-Agent":
       "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36",
     ...extraHeaders
   };
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isRetryableTrack91NotFound(error: unknown) {
+  return error instanceof Error && /did not find this .* shipment/i.test(error.message);
 }
 
 function extractTrackerSnapshot(html: string) {
@@ -371,7 +387,7 @@ function mapTrack91Status(result: Track91Result): CourierStatusResult {
   };
 }
 
-export async function fetchTrack91Status(
+async function fetchTrack91StatusOnce(
   courierSlug: "dtdc" | "st-courier",
   trackingId: string
 ): Promise<CourierStatusResult> {
@@ -411,6 +427,10 @@ export async function fetchTrack91Status(
       Cookie: serializeCookies(cookieJar),
       Origin: TRACK91_ORIGIN,
       Referer: trackingUrl,
+      "Sec-Fetch-Dest": "empty",
+      "Sec-Fetch-Mode": "cors",
+      "Sec-Fetch-Site": "same-origin",
+      "Sec-Fetch-User": "?0",
       "X-Livewire": "1"
     }),
     method: "POST",
@@ -446,6 +466,22 @@ export async function fetchTrack91Status(
   }
 
   return mapTrack91Status(result);
+}
+
+export async function fetchTrack91Status(
+  courierSlug: "dtdc" | "st-courier",
+  trackingId: string
+): Promise<CourierStatusResult> {
+  try {
+    return await fetchTrack91StatusOnce(courierSlug, trackingId);
+  } catch (error) {
+    if (!isRetryableTrack91NotFound(error)) {
+      throw error;
+    }
+
+    await sleep(TRACK91_NOT_FOUND_RETRY_DELAY_MS);
+    return fetchTrack91StatusOnce(courierSlug, trackingId);
+  }
 }
 
 export function fetchTrack91DtdcStatus(trackingId: string) {

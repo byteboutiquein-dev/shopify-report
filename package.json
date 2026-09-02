@@ -9,6 +9,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "courier:worker": "node scripts/courier-status-worker.mjs",
+    "courier:worker:loop": "node scripts/courier-status-worker.mjs --loop",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit"
   },
