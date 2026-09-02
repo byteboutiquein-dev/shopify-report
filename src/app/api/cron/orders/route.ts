@@ -1,7 +1,7 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 
 import { isAuthorizedCronRequest } from "@/lib/cron-auth";
-import { runCombinedSync } from "@/lib/sync/combined-sync";
+import { syncShopifyOrders } from "@/lib/sync/shopify-orders";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -17,17 +17,27 @@ export async function GET(request: Request) {
     );
   }
 
-  const result = await runCombinedSync({
-    syncType: "Scheduled"
+  const startedAt = new Date().toISOString();
+
+  after(async () => {
+    try {
+      const result = await syncShopifyOrders({
+        syncType: "Scheduled"
+      });
+      console.log("Scheduled Shopify order sync finished", {
+        checked: result.ordersChecked,
+        inserted: result.ordersInserted,
+        status: result.status,
+        updated: result.ordersUpdated
+      });
+    } catch (error) {
+      console.error("Scheduled Shopify order sync failed", error);
+    }
   });
 
-  return NextResponse.json(
-    {
-      ok: result.status !== "Failed",
-      ...result
-    },
-    {
-      status: result.status === "Failed" ? 500 : 200
-    }
-  );
+  return NextResponse.json({
+    ok: true,
+    message: "Scheduled Shopify order sync accepted. Order sync will continue in the background.",
+    ranAt: startedAt
+  }, { status: 202 });
 }
