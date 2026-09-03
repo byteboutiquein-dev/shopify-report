@@ -9,7 +9,6 @@ const TRACKING_PAGE_SIZE = 500;
 const SCHEDULED_TRACKING_DELAY_MS = 10_000;
 const SCHEDULED_TRACKING_MAX_ORDERS = 10;
 const SCHEDULED_TRACKING_LOOKBACK_DAYS = 30;
-const SCHEDULED_TRACKING_MIN_RECHECK_HOURS = 12;
 const SCHEDULED_TRACKING_ACTIVE_RUN_MINUTES = 14;
 
 export type TrackingCheckSource = "Manual" | "Scheduled";
@@ -118,20 +117,11 @@ function compareNullableText(left: string | null, right: string | null, nullsFir
 }
 
 function compareScheduledTrackingRows(left: TrackingStatusRow, right: TrackingStatusRow) {
-  const leftCheckFailed = left.tracking_check_error ? 0 : 1;
-  const rightCheckFailed = right.tracking_check_error ? 0 : 1;
-
   return (
-    leftCheckFailed - rightCheckFailed ||
     compareNullableText(left.courier_date, right.courier_date, false) ||
     compareNullableText(left.tracking_checked_at, right.tracking_checked_at) ||
     compareNullableText(left.order_id, right.order_id)
   );
-}
-
-function scheduledRecheckCutoffIso() {
-  const cutoff = new Date(Date.now() - SCHEDULED_TRACKING_MIN_RECHECK_HOURS * 60 * 60 * 1000);
-  return cutoff.toISOString().replace(/\.\d{3}Z$/, "Z");
 }
 
 function scheduledOrderDateCutoff() {
@@ -187,7 +177,6 @@ async function fetchTrackingRowsPage(orderIds: string[], options: Required<Track
 
   if (!orderIds.length && options.source === "Scheduled") {
     query = query
-      .or(`tracking_checked_at.is.null,tracking_checked_at.lt.${scheduledRecheckCutoffIso()}`)
       .gte("orders.order_date", scheduledOrderDateCutoff())
       .order("courier_date", { ascending: true, nullsFirst: false })
       .order("tracking_checked_at", { ascending: true, nullsFirst: true })
