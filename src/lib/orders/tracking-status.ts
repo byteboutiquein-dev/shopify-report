@@ -40,8 +40,10 @@ type ActiveTrackingCheckLogRow = {
 
 type TrackingStatusCheckOptions = {
   includeDelivered?: boolean;
+  logId?: string | null;
   maxOrders?: number;
   perOrderDelayMs?: number;
+  skipActiveRunCheck?: boolean;
   source?: TrackingCheckSource;
   tolerateFailures?: boolean;
 };
@@ -86,6 +88,14 @@ export type TrackingStatusCheckResult = {
   rows: ReportRow[];
   skipped: number;
   updated: number;
+};
+
+export type ScheduledTrackingCheckRun = {
+  activeLogId: string | null;
+  accepted: boolean;
+  logId: string | null;
+  message: string;
+  startedAt: string;
 };
 
 function sleep(ms: number) {
@@ -260,6 +270,33 @@ async function createTrackingCheckLog(source: TrackingCheckSource) {
   return response.data.id;
 }
 
+export async function prepareScheduledTrackingCheckRun(): Promise<ScheduledTrackingCheckRun> {
+  const startedAt = new Date().toISOString();
+  const activeLog = await getActiveScheduledTrackingLog();
+
+  if (activeLog) {
+    return {
+      activeLogId: activeLog.id,
+      accepted: false,
+      logId: activeLog.id,
+      message: "Scheduled courier status sync skipped because another run is already active.",
+      startedAt: activeLog.started_at
+    };
+  }
+
+  const logId = await createTrackingCheckLog("Scheduled");
+
+  return {
+    activeLogId: null,
+    accepted: Boolean(logId),
+    logId,
+    message: logId
+      ? "Scheduled courier status sync accepted. Tracking checks will continue in the background with a 10 second gap between orders."
+      : "Scheduled courier status sync could not create a tracking log.",
+    startedAt
+  };
+}
+
 async function getActiveScheduledTrackingLog() {
   const supabase = createServerSupabaseClient();
   const response = await supabase
@@ -383,17 +420,19 @@ export async function checkOrderTrackingStatuses(
   const uniqueOrderIds = [...new Set(orderIds.filter(Boolean))];
   const checkOptions = {
     includeDelivered: options.includeDelivered ?? Boolean(uniqueOrderIds.length),
+    logId: options.logId ?? null,
     maxOrders:
       options.maxOrders ??
       (options.source === "Scheduled" && !uniqueOrderIds.length ? SCHEDULED_TRACKING_MAX_ORDERS : Number.MAX_SAFE_INTEGER),
     perOrderDelayMs:
       options.perOrderDelayMs ??
       (options.source === "Scheduled" && !uniqueOrderIds.length ? SCHEDULED_TRACKING_DELAY_MS : 0),
+    skipActiveRunCheck: options.skipActiveRunCheck ?? false,
     source: options.source ?? "Manual",
     tolerateFailures: options.tolerateFailures ?? options.source === "Scheduled"
   } satisfies Required<TrackingStatusCheckOptions>;
 
-  if (checkOptions.source === "Scheduled" && !uniqueOrderIds.length) {
+  if (checkOptions.source === "Scheduled" && !uniqueOrderIds.length && !checkOptions.skipActiveRunCheck) {
     const activeLog = await getActiveScheduledTrackingLog();
 
     if (activeLog) {
@@ -411,7 +450,7 @@ export async function checkOrderTrackingStatuses(
     }
   }
 
-  const logId = await createTrackingCheckLog(checkOptions.source);
+  const logId = checkOptions.logId ?? await createTrackingCheckLog(checkOptions.source);
   const failures: TrackingStatusFailure[] = [];
   const refreshedOrderIds = new Set<string>();
   const logItems: TrackingCheckLogItemInsert[] = [];

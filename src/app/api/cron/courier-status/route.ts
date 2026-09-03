@@ -1,10 +1,11 @@
 import { after, NextResponse } from "next/server";
 
 import { isAuthorizedCronRequest } from "@/lib/cron-auth";
-import { checkOrderTrackingStatuses } from "@/lib/orders/tracking-status";
+import { checkOrderTrackingStatuses, prepareScheduledTrackingCheckRun } from "@/lib/orders/tracking-status";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
+export const preferredRegion = "bom1";
 
 export async function GET(request: Request) {
   if (!isAuthorizedCronRequest(request)) {
@@ -17,12 +18,26 @@ export async function GET(request: Request) {
     );
   }
 
-  const startedAt = new Date().toISOString();
+  const preparedRun = await prepareScheduledTrackingCheckRun();
+
+  if (!preparedRun.accepted) {
+    return NextResponse.json({
+      activeLogId: preparedRun.activeLogId,
+      logId: preparedRun.logId,
+      ok: true,
+      skipped: true,
+      message: preparedRun.message,
+      ranAt: new Date().toISOString(),
+      startedAt: preparedRun.startedAt
+    }, { status: 202 });
+  }
 
   after(async () => {
     try {
       const courierSync = await checkOrderTrackingStatuses([], {
         includeDelivered: false,
+        logId: preparedRun.logId,
+        skipActiveRunCheck: true,
         source: "Scheduled"
       });
       console.log("Scheduled courier status sync finished", {
@@ -37,8 +52,10 @@ export async function GET(request: Request) {
   });
 
   return NextResponse.json({
+    logId: preparedRun.logId,
     ok: true,
-    message: "Scheduled courier status sync accepted. Tracking checks will continue in the background with a 10 second gap between orders.",
-    ranAt: startedAt
+    message: preparedRun.message,
+    ranAt: new Date().toISOString(),
+    startedAt: preparedRun.startedAt
   }, { status: 202 });
 }

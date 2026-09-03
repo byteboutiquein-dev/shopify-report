@@ -5,6 +5,7 @@ import { syncShopifyOrders } from "@/lib/sync/shopify-orders";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
+export const preferredRegion = "bom1";
 
 export async function GET(request: Request) {
   if (!isAuthorizedCronRequest(request)) {
