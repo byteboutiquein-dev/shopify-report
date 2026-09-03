@@ -340,6 +340,35 @@ async function finishTrackingCheckLog(
   }
 }
 
+async function updateTrackingCheckLogProgress(
+  logId: string | null,
+  result: {
+    checked: number;
+    failed: number;
+    skipped: number;
+    updated: number;
+  }
+) {
+  if (!logId) {
+    return;
+  }
+
+  const supabase = createServerSupabaseClient();
+  const response = await supabase
+    .from("tracking_check_logs")
+    .update({
+      orders_checked: result.checked,
+      orders_failed: result.failed,
+      orders_skipped: result.skipped,
+      orders_updated: result.updated
+    })
+    .eq("id", logId);
+
+  if (response.error) {
+    console.warn("Courier tracking log progress update skipped:", response.error.message);
+  }
+}
+
 async function insertTrackingCheckLogItems(logId: string | null, items: TrackingCheckLogItemInsert[]) {
   if (!logId || !items.length) {
     return;
@@ -355,6 +384,14 @@ async function insertTrackingCheckLogItems(logId: string | null, items: Tracking
       return;
     }
   }
+}
+
+async function insertTrackingCheckLogItem(logId: string | null, item: TrackingCheckLogItemInsert | null) {
+  if (!logId || !item) {
+    return;
+  }
+
+  await insertTrackingCheckLogItems(logId, [item]);
 }
 
 function createTrackingLogItem(
@@ -442,7 +479,6 @@ export async function checkOrderTrackingStatuses(
   const logId = checkOptions.logId ?? await createTrackingCheckLog(checkOptions.source);
   const failures: TrackingStatusFailure[] = [];
   const refreshedOrderIds = new Set<string>();
-  const logItems: TrackingCheckLogItemInsert[] = [];
   let updated = 0;
   let checked = 0;
   let skipped = 0;
@@ -462,11 +498,18 @@ export async function checkOrderTrackingStatuses(
       if (!courierName || !trackingId) {
         skipped += 1;
         if (logId) {
-          logItems.push(
+          await insertTrackingCheckLogItem(
+            logId,
             createTrackingLogItem(logId, row, orderName, "Skipped", {
               errorMessage: !courierName ? "Courier name is missing." : "Tracking ID is missing."
             })
           );
+          await updateTrackingCheckLogProgress(logId, {
+            checked,
+            failed: failures.length,
+            skipped,
+            updated
+          });
         }
         continue;
       }
@@ -522,7 +565,8 @@ export async function checkOrderTrackingStatuses(
         }
 
         if (logId) {
-          logItems.push(
+          await insertTrackingCheckLogItem(
+            logId,
             createTrackingLogItem(logId, row, orderName, auditRows.length ? "Updated" : "Fetched", {
               checkedAt,
               fetchedCourierDate: status.courierDate,
@@ -536,6 +580,12 @@ export async function checkOrderTrackingStatuses(
               trackingUrl: payload.tracking_url
             })
           );
+          await updateTrackingCheckLogProgress(logId, {
+            checked,
+            failed: failures.length,
+            skipped,
+            updated
+          });
         }
 
         refreshedOrderIds.add(row.order_id);
@@ -575,7 +625,8 @@ export async function checkOrderTrackingStatuses(
         }
 
         if (logId) {
-          logItems.push(
+          await insertTrackingCheckLogItem(
+            logId,
             createTrackingLogItem(logId, row, orderName, "Failed", {
               checkedAt,
               errorMessage: reason,
@@ -589,6 +640,13 @@ export async function checkOrderTrackingStatuses(
           orderId: row.order_id,
           reason
         });
+
+        await updateTrackingCheckLogProgress(logId, {
+          checked,
+          failed: failures.length,
+          skipped,
+          updated
+        });
       }
 
       if (checkOptions.perOrderDelayMs > 0 && rowIndex < trackingRows.length - 1) {
@@ -598,7 +656,6 @@ export async function checkOrderTrackingStatuses(
 
     const totalSkipped = skipped + Math.max(0, uniqueOrderIds.length - trackingRows.length);
 
-    await insertTrackingCheckLogItems(logId, logItems);
     await finishTrackingCheckLog(logId, {
       checked,
       failed: failures.length,
